@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from .base import JobListing
 from .indeed_integration import IndeedIntegration
 from .glassdoor_integration import GlassdoorIntegration
-from ..linkedin_integration import LinkedInIntegration
+from .linkedin_integration import LinkedInIntegration
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ import random
 from pathlib import Path
 
 # Import configuration and DI container
-from config.config import get_config
+from job_application_automation.config.config import get_config
 from src.di import container, injectable, inject, configure_container
 
 # Import interfaces and services

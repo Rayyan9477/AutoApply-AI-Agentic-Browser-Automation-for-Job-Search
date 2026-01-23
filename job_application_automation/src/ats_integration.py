@@ -15,7 +15,7 @@ from datetime import datetime
 # Import project modules
 from src.resume_optimizer import ATSScorer, ResumeOptimizer
 from src.application_tracker import ApplicationTracker
-from config.llama_config import LlamaConfig
+from job_application_automation.config.llama_config import LlamaConfig
 
 # Import for GitHub token-based Llama 4 integration
 from azure.ai.inference import ChatCompletionsClient
@@ -137,10 +137,10 @@ class ATSIntegrationManager:
             self.llama_config = LLMConfigAdapter(llm_config)
         else:
             try:
-                from config.llama_config import LlamaConfig
+                from job_application_automation.config.llama_config import LlamaConfig
                 self.llama_config = LlamaConfig()
             except ImportError:
-                from config.config import LLMConfig
+                from job_application_automation.config.config import LLMConfig
                 self.llama_config = LLMConfig()
         
         # Initialize components

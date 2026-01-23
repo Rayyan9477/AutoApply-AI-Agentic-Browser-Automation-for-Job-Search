@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 # Import configuration
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.crawl4ai_config import Crawl4AIConfig
+from job_application_automation.config.crawl4ai_config import Crawl4AIConfig
 
 # Set up logging with absolute path for the log file
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

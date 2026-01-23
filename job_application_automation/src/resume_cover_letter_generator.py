@@ -28,7 +28,7 @@ from azure.core.credentials import AzureKeyCredential
 # Import configuration
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.llama_config import LlamaConfig
+from job_application_automation.config.llama_config import LlamaConfig
 
 # Set up logging with absolute path for the log file
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

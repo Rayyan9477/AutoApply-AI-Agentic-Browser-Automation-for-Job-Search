@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 import os
 import logging
 
-from config.llama_config import LlamaConfig
+from job_application_automation.config.llama_config import LlamaConfig
 
 logger = logging.getLogger(__name__)
 

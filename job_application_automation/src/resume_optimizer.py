@@ -23,13 +23,13 @@ import requests
 try:
     # When imported as a module
     from src.resume_cover_letter_generator import ResumeGenerator
-    from config.llama_config import LlamaConfig
+    from job_application_automation.config.llama_config import LlamaConfig
 except ImportError:
     # When run directly
     import sys
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from resume_cover_letter_generator import ResumeGenerator
-    from config.llama_config import LlamaConfig
+    from job_application_automation.config.llama_config import LlamaConfig
 
 # Set up logging
 logging.basicConfig(
@@ -898,7 +898,7 @@ class ResumeOptimizer:
             self.llama_config = llama_config
         else:
             try:
-                from config.llama_config import LlamaConfig
+                from job_application_automation.config.llama_config import LlamaConfig
                 self.llama_config = LlamaConfig()
             except ImportError:
                 logger.warning("LlamaConfig not found, using basic configuration")

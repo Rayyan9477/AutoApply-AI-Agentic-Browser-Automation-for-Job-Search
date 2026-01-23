@@ -19,11 +19,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 # Import configuration
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.linkedin_mcp_config import LinkedInMCPConfig
-from config.config import LinkedInConfig
+from job_application_automation.config.linkedin_mcp_config import LinkedInMCPConfig
+from job_application_automation.config.config import LinkedInConfig
 
 # Import the compatibility module for LinkedIn MCP
-from src.job_sources.linkedin_mcp_compat import create_linkedin_mcp, is_linkedin_mcp_available
+from .linkedin_mcp_compat import create_linkedin_mcp, is_linkedin_mcp_available
 
 # Set up logging with absolute path for the log file
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -189,7 +189,7 @@ class LinkedInIntegration:
             try:
                 # Import required modules
                 from src.utils.browser_automation import JobSearchBrowser
-                from config.browser_config import BrowserConfig
+                from job_application_automation.config.browser_config import BrowserConfig
                 
                 # Create custom browser config with headless mode initially disabled
                 browser_config = BrowserConfig()

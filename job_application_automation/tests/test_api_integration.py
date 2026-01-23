@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 from dotenv import load_dotenv
-from config.llama_config import LlamaConfig
+from job_application_automation.config.llama_config import LlamaConfig
 from src.resume_cover_letter_generator import ResumeGenerator
 
 # Set up logging

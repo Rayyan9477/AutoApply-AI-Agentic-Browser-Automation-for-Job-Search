@@ -33,7 +33,7 @@ from src.ats_integration import ATSIntegrationManager
 from src.job_sources.linkedin_integration import LinkedInIntegration
 from src.resume_optimizer import ATSScorer, ResumeOptimizer
 from src.application_tracker import ApplicationTracker
-from config.llama_config import LlamaConfig
+from job_application_automation.config.llama_config import LlamaConfig
 
 # Set up logging
 logging.basicConfig(

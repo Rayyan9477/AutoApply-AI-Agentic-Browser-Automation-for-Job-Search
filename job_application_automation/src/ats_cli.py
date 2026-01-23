@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import project modules
 from src.resume_optimizer import ATSScorer, ResumeOptimizer
 from src.ats_integration import ATSIntegrationManager
-from config.llama_config import LlamaConfig
+from job_application_automation.config.llama_config import LlamaConfig
 
 # Set up logging
 logging.basicConfig(

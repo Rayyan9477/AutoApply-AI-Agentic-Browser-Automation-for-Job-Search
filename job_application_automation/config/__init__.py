@@ -12,7 +12,15 @@ from .config import LLMConfig
 from .gemini_config import GeminiConfig
 from .logging_config import LoggingConfig
 
-__all__ = ['LLMConfig', 'GeminiConfig', 'LoggingConfig']
+__all__ = [
+    'BrowserConfig',
+    'Crawl4AIConfig', 
+    'LinkedInMCPConfig',
+    'LlamaConfig',
+    'LLMConfig',
+    'GeminiConfig',
+    'LoggingConfig'
+]
 
 # Set default LLM provider to Gemini
 DEFAULT_LLM_PROVIDER = "gemini"
