@@ -30,7 +30,7 @@ if project_root not in sys.path:
 
 # Import project modules
 from src.ats_integration import ATSIntegrationManager
-from src.linkedin_integration import LinkedInIntegration
+from src.job_sources.linkedin_integration import LinkedInIntegration
 from src.resume_optimizer import ATSScorer, ResumeOptimizer
 from src.application_tracker import ApplicationTracker
 from config.llama_config import LlamaConfig

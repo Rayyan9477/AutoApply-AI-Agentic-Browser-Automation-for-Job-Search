@@ -174,9 +174,9 @@ def configure_container(config: dict) -> None:
     from job_application_automation.config.config import ApplicationConfig, get_config
     
     # Import services using relative imports since we're in the src directory
-    from src.browser_automation import JobSearchBrowser
-    from src.web_scraping import JobDetailsScraper
-    from src.linkedin_integration import LinkedInIntegration
+    from src.utils.browser_automation import JobSearchBrowser
+    from src.utils.web_scraping import JobDetailsScraper
+    from src.job_sources.linkedin_integration import LinkedInIntegration
     from src.resume_cover_letter_generator import ResumeGenerator
     from src.application_tracker import ApplicationTracker
     from src.ats_integration import ATSIntegrationManager

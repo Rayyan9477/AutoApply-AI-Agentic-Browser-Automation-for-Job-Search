@@ -23,7 +23,7 @@ from config.linkedin_mcp_config import LinkedInMCPConfig
 from config.config import LinkedInConfig
 
 # Import the compatibility module for LinkedIn MCP
-from src.linkedin_mcp_compat import create_linkedin_mcp, is_linkedin_mcp_available
+from src.job_sources.linkedin_mcp_compat import create_linkedin_mcp, is_linkedin_mcp_available
 
 # Set up logging with absolute path for the log file
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -188,7 +188,7 @@ class LinkedInIntegration:
             logger.info("Found saved LinkedIn cookies, attempting to use them")
             try:
                 # Import required modules
-                from src.browser_automation import JobSearchBrowser
+                from src.utils.browser_automation import JobSearchBrowser
                 from config.browser_config import BrowserConfig
                 
                 # Create custom browser config with headless mode initially disabled
@@ -214,7 +214,7 @@ class LinkedInIntegration:
             logger.info("No valid authentication found, attempting manual login")
             
             # Import required modules for browser automation
-            from src.browser_automation import JobSearchBrowser
+            from src.utils.browser_automation import JobSearchBrowser
             from config.browser_config import BrowserConfig
             
             # Create custom browser config with headless mode disabled for manual login
@@ -323,7 +323,7 @@ class LinkedInIntegration:
         """
         try:
             # Import the web scraper dynamically to avoid circular imports
-            from src.browser_automation import JobSearchBrowser
+            from src.utils.browser_automation import JobSearchBrowser
             from config.browser_config import BrowserConfig
             
             # Initialize the browser
@@ -456,7 +456,7 @@ class LinkedInIntegration:
         """
         try:
             # Import web scraping module dynamically
-            from src.web_scraping import JobDetailsScraper
+            from src.utils.web_scraping import JobDetailsScraper
             
             # Create URL for the job
             job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
@@ -575,7 +575,7 @@ class LinkedInIntegration:
                 return False
                 
             # Import the browser automation module dynamically
-            from src.browser_automation import JobSearchBrowser
+            from src.utils.browser_automation import JobSearchBrowser
             from config.browser_config import BrowserConfig
             
             # Create the job URL

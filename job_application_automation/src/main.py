@@ -20,9 +20,9 @@ from config.config import get_config
 from src.di import container, injectable, inject, configure_container
 
 # Import interfaces and services
-from src.browser_automation import JobSearchBrowser
-from src.web_scraping import JobDetailsScraper
-from src.linkedin_integration import LinkedInIntegration
+from src.utils.browser_automation import JobSearchBrowser
+from src.utils.web_scraping import JobDetailsScraper
+from src.job_sources.linkedin_integration import LinkedInIntegration
 from src.resume_cover_letter_generator import ResumeGenerator
 from src.application_tracker import ApplicationTracker
 from src.ats_integration import ATSIntegrationManager

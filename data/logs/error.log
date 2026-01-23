@@ -1,5 +1,0 @@
-2025-04-27 22:52:35,011 - src.browser_automation - ERROR - Error searching LinkedIn: object NoneType can't be used in 'await' expression
-2025-04-27 22:52:40,959 - src.browser_automation - ERROR - Error searching LinkedIn: object NoneType can't be used in 'await' expression
-2025-04-27 22:52:48,050 - src.browser_automation - ERROR - Error searching LinkedIn: object NoneType can't be used in 'await' expression
-2025-04-27 22:52:59,354 - browser_automation - ERROR - Error searching LinkedIn: object NoneType can't be used in 'await' expression
-2025-04-27 22:53:00,398 - __main__ - ERROR - No job listings found

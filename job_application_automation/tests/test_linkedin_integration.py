@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.linkedin_integration import (
+from src.job_sources.linkedin_integration import (
     LinkedInIntegration,
     LinkedInAuthError,
     LinkedInRateLimitError,
