@@ -4,7 +4,7 @@ Gemini API provider implementation.
 import logging
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
-from config.gemini_config import GeminiConfig
+from job_application_automation.config.gemini_config import GeminiConfig
 
 logger = logging.getLogger(__name__)
 

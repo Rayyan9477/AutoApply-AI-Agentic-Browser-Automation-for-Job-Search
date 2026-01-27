@@ -15,7 +15,7 @@ from sqlalchemy import func, case
 from src.database import get_db, execute_with_retry
 from src.models import JobApplication, ApplicationInteraction, JobSkill, SearchHistory, VectorIndex
 from src.vector_database import vector_db, time_vector_operation
-from config.logging_config import AuditLogger
+from job_application_automation.config.logging_config import AuditLogger
 from src.database_errors import handle_db_errors, with_retry, safe_commit, DatabaseError
 
 # Set up logging

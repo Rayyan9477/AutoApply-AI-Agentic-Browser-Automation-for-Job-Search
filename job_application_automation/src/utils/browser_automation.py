@@ -16,7 +16,7 @@ from typing import List, Dict, Optional, Any, Union
 from playwright.async_api import Page, ElementHandle
 from browser_use import Agent, Browser
 from pathlib import Path
-from config.config import get_config
+from job_application_automation.config.config import get_config
 
 CONFIG = get_config()
 logger = logging.getLogger(__name__)

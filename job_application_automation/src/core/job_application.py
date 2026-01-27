@@ -19,7 +19,7 @@ from application_tracker import ApplicationTracker
 from ats_integration import ATSIntegrationManager
 from utils.path_utils import ensure_dir
 from utils.error_handling import with_retry
-from config.config import get_config
+from job_application_automation.config.config import get_config
 
 # Get configuration
 CONFIG = get_config()
