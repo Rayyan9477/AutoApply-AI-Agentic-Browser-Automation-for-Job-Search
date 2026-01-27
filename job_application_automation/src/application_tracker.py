@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
+from sqlalchemy.exc import IntegrityError
 
 # Fix relative imports by using absolute imports
 from src.database import get_db, execute_with_retry
@@ -84,38 +85,56 @@ class ApplicationTracker:
                 logger.warning(f"Cover letter file not found: {cover_letter_path}")
             
             with get_db() as db:
-                # Check for existing application with this job_id
-                existing = db.query(JobApplication).filter_by(job_id=job_id).first()
-                if existing:
-                    logger.info(f"Application for job {job_id} already exists, updating instead")
-                    return self.update_application(
-                        application_id=existing.id,
-                        status="updated",
-                        match_score=match_score,
-                        resume_path=resume_path,
-                        cover_letter_path=cover_letter_path,
-                        notes=notes
-                    )
+                try:
+                    # Check for existing application with this job_id
+                    existing = db.query(JobApplication).filter_by(job_id=job_id).first()
+                    if existing:
+                        logger.info(f"Application for job {job_id} already exists, updating instead")
+                        return self.update_application(
+                            application_id=existing.id,
+                            status="updated",
+                            match_score=match_score,
+                            resume_path=resume_path,
+                            cover_letter_path=cover_letter_path,
+                            notes=notes
+                        )
 
-                # Create new application record with sanitized data
-                application = JobApplication(
-                    job_id=job_id[:100],  # Limit to 100 chars
-                    job_title=job_title[:200],  # Limit to 200 chars
-                    company=company[:200],  # Limit to 200 chars
-                    application_date=datetime.utcnow(),
-                    status="submitted",
-                    source=source[:50],  # Limit to 50 chars
-                    match_score=match_score,
-                    resume_path=resume_path[:500],  # Limit to 500 chars
-                    cover_letter_path=cover_letter_path[:500] if cover_letter_path else None,
-                    notes=notes[:1000] if notes else None,  # Limit to 1000 chars
-                    url=url[:500] if url else None,  # Limit to 500 chars
-                    job_description=job_description  # No limit since it's a Text field
-                )
-                
-                db.add(application)
-                db.flush()  # Get the ID without committing
-                application_id = application.id
+                    # Create new application record with sanitized data
+                    application = JobApplication(
+                        job_id=job_id[:100],  # Limit to 100 chars
+                        job_title=job_title[:200],  # Limit to 200 chars
+                        company=company[:200],  # Limit to 200 chars
+                        application_date=datetime.utcnow(),
+                        status="submitted",
+                        source=source[:50],  # Limit to 50 chars
+                        match_score=match_score,
+                        resume_path=resume_path[:500],  # Limit to 500 chars
+                        cover_letter_path=cover_letter_path[:500] if cover_letter_path else None,
+                        notes=notes[:1000] if notes else None,  # Limit to 1000 chars
+                        url=url[:500] if url else None,  # Limit to 500 chars
+                        job_description=job_description  # No limit since it's a Text field
+                    )
+                    
+                    db.add(application)
+                    db.flush()  # Get the ID without committing
+                    application_id = application.id
+                except IntegrityError:
+                    # Handle race condition - another process created this application
+                    db.rollback()
+                    existing = db.query(JobApplication).filter_by(job_id=job_id).first()
+                    if existing:
+                        logger.info(f"Application for job {job_id} was created concurrently, updating instead")
+                        return self.update_application(
+                            application_id=existing.id,
+                            status="updated",
+                            match_score=match_score,
+                            resume_path=resume_path,
+                            cover_letter_path=cover_letter_path,
+                            notes=notes
+                        )
+                    else:
+                        # Re-raise if it's not a duplicate issue
+                        raise
                 
                 # Add skills if provided
                 if skills and skills:
@@ -720,7 +739,8 @@ class ApplicationTracker:
                 query = db.query(JobApplication)
                 
                 if company:
-                    query = query.filter(JobApplication.company.ilike(f"%{company}%"))
+                    # Use parameterized query to prevent SQL injection
+                    query = query.filter(func.lower(JobApplication.company).contains(company.lower()))
                 if source:
                     query = query.filter(JobApplication.source == source)
                 if status:
@@ -978,8 +998,12 @@ class ApplicationTracker:
                     for j in all_jobs:
                         if j.vector_embedding:
                             j_embedding = np.frombuffer(j.vector_embedding, dtype=np.float32)
-                            # Calculate cosine similarity
-                            similarity = np.dot(embedding, j_embedding) / (np.linalg.norm(embedding) * np.linalg.norm(j_embedding))
+                            # Calculate cosine similarity with zero-division protection
+                            norm_product = np.linalg.norm(embedding) * np.linalg.norm(j_embedding)
+                            if norm_product == 0:
+                                similarity = 0.0
+                            else:
+                                similarity = np.dot(embedding, j_embedding) / norm_product
                             similarities.append((j, float(similarity)))
                     
                     # Sort by similarity (highest first)

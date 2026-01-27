@@ -47,21 +47,30 @@ class LLMClient:
             if provider == "openai":
                 from openai import OpenAI
 
-                self._client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    raise ValueError("OPENAI_API_KEY environment variable not set. Please add it to your .env file.")
+                self._client = OpenAI(api_key=api_key)
                 self._base_url = "https://api.openai.com/v1"
                 self._model = getattr(self.cfg, "api_model", getattr(self.cfg, "openai_model", "gpt-4o-mini"))
 
             elif provider == "groq":
                 from openai import OpenAI
 
-                self._client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url="https://api.groq.com/openai/v1")
+                api_key = os.getenv("GROQ_API_KEY")
+                if not api_key:
+                    raise ValueError("GROQ_API_KEY environment variable not set. Please add it to your .env file.")
+                self._client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
                 self._base_url = "https://api.groq.com/openai/v1"
                 self._model = getattr(self.cfg, "api_model", "llama-3.1-8b-instant")
 
             elif provider == "openrouter":
                 from openai import OpenAI
 
-                self._client = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
+                api_key = os.getenv("OPENROUTER_API_KEY")
+                if not api_key:
+                    raise ValueError("OPENROUTER_API_KEY environment variable not set. Please add it to your .env file.")
+                self._client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
                 self._base_url = "https://openrouter.ai/api/v1"
                 self._model = getattr(self.cfg, "api_model", "meta-llama/llama-3.1-8b-instruct")
 
@@ -72,7 +81,7 @@ class LLMClient:
 
                 token = os.getenv("GITHUB_TOKEN")
                 if not token:
-                    raise RuntimeError("GITHUB_TOKEN not set")
+                    raise ValueError("GITHUB_TOKEN environment variable not set. Please add it to your .env file.")
                 endpoint = getattr(self.cfg, "api_base_url", "https://models.github.ai/inference")
                 self._client = ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(token))
                 self._model = getattr(self.cfg, "api_model", "meta/Llama-4-Maverick-17B-128E-Instruct-FP8")
@@ -82,7 +91,7 @@ class LLMClient:
 
                 api_key = os.getenv("GEMINI_API_KEY")
                 if not api_key:
-                    raise RuntimeError("GEMINI_API_KEY not set")
+                    raise ValueError("GEMINI_API_KEY environment variable not set. Please add it to your .env file.")
                 genai.configure(api_key=api_key)
                 self._client = genai.GenerativeModel(getattr(self.cfg, "gemini_model", "gemini-1.5-flash"))
                 self._model = getattr(self.cfg, "gemini_model", "gemini-1.5-flash")

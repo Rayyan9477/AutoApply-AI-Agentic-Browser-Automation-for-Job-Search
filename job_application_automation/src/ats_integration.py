@@ -6,6 +6,8 @@ This module integrates ATS scoring and optimization with the job application pro
 import os
 import json
 import logging
+import tempfile
+import shutil
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 import pandas as pd
@@ -680,7 +682,7 @@ class ATSIntegrationManager:
             return ""
     
     def save_state(self) -> bool:
-        """Save current state including score history and resume cache."""
+        """Save current state including score history and resume cache with atomic writes."""
         try:
             state = {
                 "score_history": self.score_history,
@@ -688,15 +690,34 @@ class ATSIntegrationManager:
             }
             
             state_path = DATA_DIR / "ats_state.json"
-            with open(state_path, 'w', encoding='utf-8') as f:
-                import json
-                json.dump(state, f, indent=2)
-                
+            
+            # Ensure parent directory exists
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write to temporary file first (atomic write pattern)
+            with tempfile.NamedTemporaryFile('w', delete=False, 
+                                             dir=state_path.parent, 
+                                             encoding='utf-8',
+                                             suffix='.tmp') as tmp:
+                json.dump(state, tmp, indent=2)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+                tmp_path = tmp.name
+            
+            # Atomic rename (replaces existing file safely)
+            shutil.move(tmp_path, state_path)
+            
             logger.info(f"Saved ATS state to {state_path}")
             return True
             
         except Exception as e:
             logger.error(f"Error saving ATS state: {e}")
+            # Clean up temp file if it exists
+            if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception as cleanup_error:
+                    logger.error(f"Error cleaning up temp file: {cleanup_error}")
             return False
     
     def load_state(self) -> bool:

@@ -101,6 +101,8 @@ class JobSearchBrowser:
             logger.error(f"Unsupported job site: {job_site}")
             return []
         
+        playwright = None
+        browser = None
         try:
             # Import required modules
             from playwright.async_api import async_playwright
@@ -128,10 +130,6 @@ class JobSearchBrowser:
                 page, job_site, search_keywords, location
             )
             
-            # Close the browser
-            await browser.close()
-            await playwright.stop()
-            
             # Save job listings to a file
             self._save_job_listings(job_listings)
             
@@ -140,6 +138,18 @@ class JobSearchBrowser:
         except Exception as e:
             logger.error(f"Error during job search: {e}")
             return []
+        finally:
+            # Ensure resources are cleaned up
+            if browser:
+                try:
+                    await browser.close()
+                except Exception as e:
+                    logger.error(f"Error closing browser: {e}")
+            if playwright:
+                try:
+                    await playwright.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping playwright: {e}")
             
     async def _execute_job_site_search(self, 
                                  page: Page, 
@@ -642,6 +652,8 @@ class JobSearchBrowser:
 
     async def easy_apply_linkedin(self, job_id: str, resume_path: str, cover_letter_path: Optional[str] = None) -> bool:
         """Apply to a LinkedIn job using Easy Apply."""
+        playwright = None
+        browser = None
         try:
             # Import required modules
             from playwright.async_api import async_playwright
@@ -707,9 +719,15 @@ class JobSearchBrowser:
             
         finally:
             if browser:
-                await browser.close()
+                try:
+                    await browser.close()
+                except Exception as e:
+                    logger.error(f"Error closing browser: {e}")
             if playwright:
-                await playwright.stop()
+                try:
+                    await playwright.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping playwright: {e}")
                 
     async def _upload_resume(self, page: Page, resume_path: str) -> None:
         """Upload resume to application."""
@@ -881,6 +899,8 @@ class JobSearchBrowser:
         Returns:
             True if application was successful, False otherwise
         """
+        playwright = None
+        browser = None
         try:
             # Import required modules
             from playwright.async_api import async_playwright
@@ -972,9 +992,15 @@ class JobSearchBrowser:
             return False
         finally:
             if browser:
-                await browser.close()
+                try:
+                    await browser.close()
+                except Exception as e:
+                    logger.error(f"Error closing browser: {e}")
             if playwright:
-                await playwright.stop()
+                try:
+                    await playwright.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping playwright: {e}")
             
     async def _handle_additional_questions(self, page: Page) -> bool:
         """Handle additional application questions using AI."""
@@ -1123,6 +1149,8 @@ class JobSearchBrowser:
         Returns:
             True if cookies are valid, False otherwise
         """
+        playwright = None
+        browser = None
         try:
             # Import required modules
             from playwright.async_api import async_playwright
@@ -1161,8 +1189,6 @@ class JobSearchBrowser:
                 screenshot_path = os.path.join(self.config.screenshots_dir, "linkedin_login_required.png")
                 await page.screenshot(path=screenshot_path)
                 
-                await browser.close()
-                await playwright.stop()
                 return False
                 
             # Check for feed or other elements that indicate we're logged in
@@ -1174,18 +1200,25 @@ class JobSearchBrowser:
                 screenshot_path = os.path.join(self.config.screenshots_dir, "linkedin_logged_in.png")
                 await page.screenshot(path=screenshot_path)
                 
-                await browser.close()
-                await playwright.stop()
                 return True
                 
             logger.warning("LinkedIn authentication using cookies was ambiguous")
-            await browser.close()
-            await playwright.stop()
             return False
             
         except Exception as e:
             logger.error(f"Error testing LinkedIn cookies: {e}")
             return False
+        finally:
+            if browser:
+                try:
+                    await browser.close()
+                except Exception as e:
+                    logger.error(f"Error closing browser: {e}")
+            if playwright:
+                try:
+                    await playwright.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping playwright: {e}")
             
     async def login_to_linkedin_manual(self) -> bool:
         """
