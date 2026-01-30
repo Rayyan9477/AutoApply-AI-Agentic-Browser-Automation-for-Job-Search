@@ -7,7 +7,7 @@ from unittest.mock import Mock, MagicMock
 from typing import Dict, Any, Type, Optional
 
 # Import the DI container
-from src.di import DIContainer, inject, injectable, inject_param
+from job_application_automation.src.di import DIContainer, inject, injectable, inject_param
 
 # Test interfaces and implementations
 class IService:
@@ -150,7 +150,7 @@ def test_register_instance(container):
 def test_injectable_decorator():
     """Test the @injectable decorator."""
     # Reset the global container for this test
-    from src.di import container as global_container
+    from job_application_automation.src.di import container as global_container
     
     try:
         # Apply the decorator
@@ -245,12 +245,12 @@ def test_configure_container(monkeypatch, tmp_path):
     log_dir.mkdir()
     
     # Setup monkeypatch for imports
-    monkeypatch.setattr('src.browser_automation.JobSearchBrowser', mock_browser)
-    monkeypatch.setattr('src.web_scraping.JobDetailsScraper', mock_scraper)
-    monkeypatch.setattr('src.linkedin_integration.LinkedInIntegration', mock_linkedin)
-    monkeypatch.setattr('src.resume_cover_letter_generator.ResumeGenerator', mock_resume_gen)
-    monkeypatch.setattr('src.application_tracker.ApplicationTracker', mock_tracker)
-    monkeypatch.setattr('src.ats_integration.ATSIntegrationManager', mock_ats)
+    monkeypatch.setattr('job_application_automation.src.utils.browser_automation.JobSearchBrowser', mock_browser)
+    monkeypatch.setattr('job_application_automation.src.utils.web_scraping.JobDetailsScraper', mock_scraper)
+    monkeypatch.setattr('job_application_automation.src.job_sources.linkedin_integration.LinkedInIntegration', mock_linkedin)
+    monkeypatch.setattr('job_application_automation.src.resume_cover_letter_generator.ResumeGenerator', mock_resume_gen)
+    monkeypatch.setattr('job_application_automation.src.application_tracker.ApplicationTracker', mock_tracker)
+    monkeypatch.setattr('job_application_automation.src.ats_integration.ATSIntegrationManager', mock_ats)
     
     # Mock the ATS manager's load_state method
     mock_ats.return_value.load_state.return_value = None
@@ -271,16 +271,16 @@ def test_configure_container(monkeypatch, tmp_path):
             self.llm = {}
     
     # Import and call configure_container
-    from src.di import configure_container, container
+    from job_application_automation.src.di import configure_container, container
     configure_container(MockConfig())
     
     # Verify the container is properly configured
-    from src.utils.browser_automation import JobSearchBrowser
-    from src.utils.web_scraping import JobDetailsScraper
-    from src.job_sources.linkedin_integration import LinkedInIntegration
-    from src.resume_cover_letter_generator import ResumeGenerator
-    from src.application_tracker import ApplicationTracker
-    from src.ats_integration import ATSIntegrationManager
+    from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+    from job_application_automation.src.utils.web_scraping import JobDetailsScraper
+    from job_application_automation.src.job_sources.linkedin_integration import LinkedInIntegration
+    from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
+    from job_application_automation.src.application_tracker import ApplicationTracker
+    from job_application_automation.src.ats_integration import ATSIntegrationManager
     
     # Test resolving each service
     browser = container.resolve(JobSearchBrowser)

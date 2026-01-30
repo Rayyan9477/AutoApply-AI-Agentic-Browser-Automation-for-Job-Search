@@ -6,8 +6,8 @@ import asyncio
 import logging
 from typing import Any
 
-from core.job_application import JobApplicationAutomation
-from utils.error_handling import with_error_handling
+from job_application_automation.src.core.job_application import JobApplicationAutomation
+from job_application_automation.src.utils.error_handling import with_error_handling
 
 # Set up logging
 logger = logging.getLogger(__name__)

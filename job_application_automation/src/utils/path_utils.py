@@ -53,6 +53,41 @@ def get_data_path(subpath: Optional[str] = None) -> Path:
     return data_dir
 
 
+def get_templates_dir() -> Path:
+    """
+    Get the path to the templates directory.
+
+    Returns:
+        Path to the templates directory.
+    """
+    templates_dir = get_project_root() / "templates"
+    ensure_dir(templates_dir)
+    return templates_dir
+
+
+def get_logs_dir() -> Path:
+    """
+    Get the path to the logs directory.
+
+    Returns:
+        Path to the logs directory.
+    """
+    logs_dir = get_data_path("logs")
+    return logs_dir
+
+
+def get_models_dir() -> Path:
+    """
+    Get the path to the models directory.
+
+    Returns:
+        Path to the models directory.
+    """
+    models_dir = get_project_root() / "models"
+    ensure_dir(models_dir)
+    return models_dir
+
+
 def get_absolute_path(relative_path: str) -> Path:
     """
     Convert a relative path to an absolute path from the project root.

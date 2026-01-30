@@ -321,20 +321,8 @@ class JobSearchBrowser:
                 except Exception as e:
                     logger.warning(f"Error with selector '{selector}': {e}")
             
-            # If we couldn't extract any jobs using selectors, create a mock job
             if not job_listings:
-                logger.warning("No job listings extracted, creating mock job for testing")
-                mock_job = {
-                    "job_title": "Software Engineer",
-                    "company": "Test Company",
-                    "location": location_to_use,
-                    "source": "LinkedIn",
-                    "url": search_url,
-                    "search_keywords": keywords_to_use,
-                    "search_location": location_to_use,
-                    "scrape_time": datetime.now().isoformat()
-                }
-                job_listings.append(mock_job)
+                logger.warning("No job listings extracted from LinkedIn search results")
             
             return job_listings
             
@@ -629,8 +617,7 @@ class JobSearchBrowser:
         """
         try:
             # Create file path for job listings
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            job_listings_file = os.path.join(project_root, "data", "job_listings.json")
+            job_listings_file = str(Path(CONFIG.data_dir) / "job_listings.json")
             
             with open(job_listings_file, "w") as f:
                 json.dump(job_listings, f, indent=2)

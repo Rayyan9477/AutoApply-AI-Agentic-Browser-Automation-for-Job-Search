@@ -5,7 +5,6 @@ environment variable support, and secure credential handling.
 """
 
 import os
-import sys
 import yaml
 import logging
 from pathlib import Path
@@ -19,36 +18,17 @@ dotenv.load_dotenv()
 # Logger for configuration operations
 logger = logging.getLogger(__name__)
 
-# Configuration models
-class BrowserConfig(BaseModel):
-    """Configuration for browser automation."""
-    browser_type: str = Field(default="chromium", description="Browser type to use")
-    headless: bool = Field(default=True, description="Run browser in headless mode")
-    user_data_dir: Optional[str] = Field(default=None, description="Path to browser user data directory")
-    window_size: Dict[str, int] = Field(
-        default={"width": 1920, "height": 1080}, 
-        description="Browser window size"
-    )
-    timeout: int = Field(default=30000, description="Default timeout in milliseconds")
-    linkedin_manual_login: bool = Field(
-        default=False, 
-        description="Whether to use manual login for LinkedIn"
-    )
-    
-    @validator('browser_type')
-    def validate_browser_type(cls, v):
-        """Validate browser type."""
-        valid_types = ['chromium', 'firefox', 'webkit']
-        if v not in valid_types:
-            logger.warning(f"Invalid browser type: {v}. Using default: chromium")
-            return "chromium"
-        return v
+# Project root for absolute paths
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Import unified BrowserConfig from browser_config module
+from job_application_automation.config.browser_config import BrowserConfig
 
 class LoggingConfig(BaseModel):
     """Configuration for logging."""
     level: str = Field(default="INFO", description="Logging level")
-    file_path: str = Field(default="../data/logs/application.log", description="Log file path")
-    log_dir: str = Field(default="../data/logs", description="Directory for log files")
+    file_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "logs" / "application.log"), description="Log file path")
+    log_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "logs"), description="Directory for log files")
     format: str = Field(
         default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         description="Log message format"
@@ -89,8 +69,8 @@ class LinkedInConfig(BaseModel):
         default="http://localhost:8000/callback", 
         description="OAuth redirect URI"
     )
-    session_path: str = Field(default="../data/sessions", description="Path to store session data")
-    session_storage_path: str = Field(default="../data/sessions", description="Path to store session data (compat)")
+    session_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "sessions"), description="Path to store session data")
+    session_storage_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "sessions"), description="Path to store session data (compat)")
     use_api: bool = Field(default=True, description="Whether to use LinkedIn API")
     use_mcp: bool = Field(default=True, description="Whether to use LinkedIn MCP")
     
@@ -208,7 +188,7 @@ class ApplicationConfig(BaseModel):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     
     # Application settings
-    data_dir: str = Field(default="../data", description="Directory for application data")
+    data_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data"), description="Directory for application data")
     min_match_score: float = Field(
         default=0.7, 
         description="Minimum score to consider a job a match"
@@ -236,8 +216,8 @@ class ConfigManager:
     
     def __init__(
         self, 
-        config_path: Path = Path("../config/config.yaml"),
-        secrets_path: Path = Path("../config/.secrets.yaml")
+        config_path: Path = _PROJECT_ROOT / "config" / "config.yaml",
+        secrets_path: Path = _PROJECT_ROOT / "config" / ".secrets.yaml"
     ):
         """
         Initialize the configuration manager.

@@ -7,9 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.models import Base
-from src.application_tracker import ApplicationTracker
-from src.database import get_db
+from job_application_automation.src.models import Base
+from job_application_automation.src.application_tracker import ApplicationTracker
+from job_application_automation.src.database import get_db
 
 # Test database URL
 TEST_DB_URL = "sqlite:///:memory:"

@@ -1,19 +1,15 @@
 """
 Shared pytest fixtures and configuration.
 """
-import sys, os
-# Add project root to path for src package imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import os
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.models import Base
-from src.database import get_db, init_db
-from src.application_tracker import ApplicationTracker
+from job_application_automation.src.models import Base
+from job_application_automation.src.database import get_db, init_db
+from job_application_automation.src.application_tracker import ApplicationTracker
 
 # Test database URL
 TEST_DB_URL = "sqlite:///:memory:"

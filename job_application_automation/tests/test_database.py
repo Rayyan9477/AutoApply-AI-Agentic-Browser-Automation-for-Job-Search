@@ -11,9 +11,9 @@ from pathlib import Path
 import json
 import csv
 
-from src.models import Base, JobApplication, ApplicationInteraction, JobSkill, SearchHistory
-from src.database import get_db, check_database_connection, get_database_stats, init_db
-from src.database_monitor import (
+from job_application_automation.src.models import Base, JobApplication, ApplicationInteraction, JobSkill, SearchHistory
+from job_application_automation.src.database import get_db, check_database_connection, get_database_stats, init_db
+from job_application_automation.src.database_monitor import (
     QueryPerformanceMonitor,
     DatabaseMonitorService,
     analyze_query_patterns
