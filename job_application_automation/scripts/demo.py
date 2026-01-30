@@ -12,9 +12,9 @@ import asyncio
 import json
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+from job_application_automation.src.utils.path_utils import get_project_root
+
+project_root = get_project_root()
 
 def print_banner():
     """Print a nice banner for the demo."""
@@ -35,7 +35,7 @@ def demo_resume_optimization():
     print("-" * 40)
     
     try:
-        from src.ats_cli import analyze_resume
+        from job_application_automation.src.ats_cli import analyze_resume
         
         # Use sample files
         resume_path = project_root / "data" / "resumes" / "sample_resume.txt"
@@ -77,7 +77,7 @@ def demo_application_tracking():
     print("-" * 40)
     
     try:
-        from src.application_tracker import ApplicationTracker
+        from job_application_automation.src.application_tracker import ApplicationTracker
         
         tracker = ApplicationTracker()
         
@@ -123,7 +123,7 @@ def demo_vector_search():
     print("-" * 40)
     
     try:
-        from src.application_tracker import ApplicationTracker
+        from job_application_automation.src.application_tracker import ApplicationTracker
         
         tracker = ApplicationTracker()
         
@@ -150,7 +150,7 @@ def demo_configuration():
     print("-" * 40)
     
     try:
-        from config.config import get_config
+        from job_application_automation.config.config import get_config
         
         config = get_config()
         
@@ -208,8 +208,8 @@ def demo_gemini_integration():
     print("-" * 40)
     
     try:
-        from src.llm_providers.gemini_provider import GeminiProvider
-        from config.gemini_config import GeminiConfig
+        from job_application_automation.src.llm_providers.gemini_provider import GeminiProvider
+        from job_application_automation.config.gemini_config import GeminiConfig
         
         config = GeminiConfig()
         provider = GeminiProvider(config)

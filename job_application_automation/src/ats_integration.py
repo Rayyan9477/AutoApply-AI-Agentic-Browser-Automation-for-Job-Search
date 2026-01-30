@@ -11,12 +11,14 @@ import shutil
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 from datetime import datetime
 
 # Import project modules
-from src.resume_optimizer import ATSScorer, ResumeOptimizer
-from src.application_tracker import ApplicationTracker
+from job_application_automation.src.resume_optimizer import ATSScorer, ResumeOptimizer
+from job_application_automation.src.application_tracker import ApplicationTracker
 from job_application_automation.config.llama_config import LlamaConfig
 
 # Import for GitHub token-based Llama 4 integration
@@ -25,102 +27,22 @@ from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
 
 # Set up logging
+from job_application_automation.src.utils.path_utils import get_data_path as _get_data_path
+_data_dir = _get_data_path()
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("../data/ats_integration.log"),
+        logging.FileHandler(str(_data_dir / "ats_integration.log")),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Define paths
-DATA_DIR = Path("../data")
+DATA_DIR = _data_dir
 REPORTS_DIR = DATA_DIR / "ats_reports"
 os.makedirs(REPORTS_DIR, exist_ok=True)
-
-class LLMConfigAdapter:
-    """
-    Adapter class to provide compatibility between different LLM configuration classes.
-    This adapter bridges the gap between LLMConfig from main configuration and 
-    LlamaConfig from llama-specific configuration.
-    """
-    
-    def __init__(self, config):
-        """
-        Initialize with original configuration.
-        
-        Args:
-            config: Original configuration object (LLMConfig or LlamaConfig)
-        """
-        self.config = config
-        
-    def __getattr__(self, name):
-        """
-        Provide attribute access with fallback values for compatibility.
-        
-        Args:
-            name: Attribute name to access
-            
-        Returns:
-            Attribute value with appropriate default if not found
-        """
-        # If the attribute exists in the original config, return it
-        if hasattr(self.config, name):
-            return getattr(self.config, name)
-            
-        # Otherwise, provide compatibility defaults based on attribute name
-        defaults = {
-            'use_api': True,
-            'api_provider': getattr(self.config, 'provider', 'github'),  # Default to github
-            'api_key': getattr(self.config, 'api_key', None),
-            'github_token': getattr(self.config, 'github_token', os.getenv("GITHUB_TOKEN")),
-            'api_model': getattr(self.config, 'model', 'meta/Llama-4-Maverick-17B-128E-Instruct-FP8'),
-            'temperature': getattr(self.config, 'temperature', 0.7),
-            'top_p': getattr(self.config, 'top_p', 0.9),
-            'max_tokens': getattr(self.config, 'max_tokens', 4000),
-        }
-        
-        if name in defaults:
-            return defaults[name]
-            
-        # Attribute doesn't exist and no default is defined
-        raise AttributeError(f"'{type(self.config).__name__}' object has no attribute '{name}'")
-        
-    def __str__(self):
-        """String representation of the adapter."""
-        return f"LLMConfigAdapter({self.config})"
-        
-    def get_api_config(self):
-        """
-        Implement the get_api_config method required by ResumeOptimizer.
-        
-        Returns:
-            Dictionary with API configuration
-        """
-        # If the original config has this method, delegate to it
-        if hasattr(self.config, 'get_api_config'):
-            return self.config.get_api_config()
-            
-        # Otherwise, create API config based on provider
-        provider = getattr(self.config, 'provider', getattr(self.config, 'api_provider', 'github'))
-        
-        if provider == 'github':
-            return {
-                "endpoint": getattr(self.config, 'api_base_url', "https://models.github.ai/inference"),
-                "token": getattr(self.config, 'github_token', os.getenv("GITHUB_TOKEN")),
-                "model": getattr(self.config, 'api_model', getattr(self.config, 'model', "meta/Llama-4-Maverick-17B-128E-Instruct-FP8")),
-                "timeout": getattr(self.config, 'api_request_timeout', 60)
-            }
-        elif provider in ('openai', 'groq', 'openrouter'):
-            return {
-                "api_base": getattr(self.config, 'api_base_url', None),
-                "api_key": getattr(self.config, 'api_key', None),
-                "model": getattr(self.config, 'api_model', getattr(self.config, 'model', "gpt-4")),
-                "timeout": getattr(self.config, 'api_request_timeout', 60)
-            }
-        return {}
 
 class ATSIntegrationManager:
     """
@@ -134,16 +56,11 @@ class ATSIntegrationManager:
         Args:
             llm_config: Configuration for LLM integration. If None, default settings will be used.
         """
-        # Use config adapter to ensure compatibility
+        # Use LlamaConfig directly
         if llm_config:
-            self.llama_config = LLMConfigAdapter(llm_config)
+            self.llama_config = llm_config
         else:
-            try:
-                from job_application_automation.config.llama_config import LlamaConfig
-                self.llama_config = LlamaConfig()
-            except ImportError:
-                from job_application_automation.config.config import LLMConfig
-                self.llama_config = LLMConfig()
+            self.llama_config = LlamaConfig()
         
         # Initialize components
         self.scorer = ATSScorer()

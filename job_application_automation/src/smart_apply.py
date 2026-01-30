@@ -14,7 +14,6 @@ Usage:
 """
 
 import os
-import sys
 import argparse
 import logging
 from pathlib import Path
@@ -23,24 +22,22 @@ import asyncio
 import webbrowser
 from datetime import datetime
 
-# Add project root to path for imports
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
 # Import project modules
-from src.ats_integration import ATSIntegrationManager
-from src.job_sources.linkedin_integration import LinkedInIntegration
-from src.resume_optimizer import ATSScorer, ResumeOptimizer
-from src.application_tracker import ApplicationTracker
+from job_application_automation.src.ats_integration import ATSIntegrationManager
+from job_application_automation.src.job_sources.linkedin_integration import LinkedInIntegration
+from job_application_automation.src.resume_optimizer import ATSScorer, ResumeOptimizer
+from job_application_automation.src.application_tracker import ApplicationTracker
 from job_application_automation.config.llama_config import LlamaConfig
+from job_application_automation.src.utils.path_utils import get_project_root, get_data_path
+
+project_root = str(get_project_root())
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(project_root, "data", "main.log")),
+        logging.FileHandler(str(get_data_path() / "main.log")),
         logging.StreamHandler()
     ]
 )

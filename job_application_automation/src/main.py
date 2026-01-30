@@ -17,15 +17,15 @@ from pathlib import Path
 
 # Import configuration and DI container
 from job_application_automation.config.config import get_config
-from src.di import container, injectable, inject, configure_container
+from job_application_automation.src.di import container, injectable, inject, configure_container
 
 # Import interfaces and services
-from src.utils.browser_automation import JobSearchBrowser
-from src.utils.web_scraping import JobDetailsScraper
-from src.job_sources.linkedin_integration import LinkedInIntegration
-from src.resume_cover_letter_generator import ResumeGenerator
-from src.application_tracker import ApplicationTracker
-from src.ats_integration import ATSIntegrationManager
+from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+from job_application_automation.src.utils.web_scraping import JobDetailsScraper
+from job_application_automation.src.job_sources.linkedin_integration import LinkedInIntegration
+from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
+from job_application_automation.src.application_tracker import ApplicationTracker
+from job_application_automation.src.ats_integration import ATSIntegrationManager
 
 # Get configuration
 CONFIG = get_config()
@@ -185,7 +185,7 @@ class JobApplicationAutomation:
         
         # Save combined job listings to file
         try:
-            with open("../data/combined_job_listings.json", "w") as f:
+            with open(str(Path(CONFIG.data_dir) / "combined_job_listings.json"), "w") as f:
                 json.dump(combined_job_listings, f, indent=2)
             logger.info(f"Saved {len(combined_job_listings)} combined job listings")
         except Exception as e:
@@ -275,7 +275,7 @@ class JobApplicationAutomation:
         
         # Save filtered jobs to file
         try:
-            with open("../data/filtered_jobs.json", "w") as f:
+            with open(str(Path(CONFIG.data_dir) / "filtered_jobs.json"), "w") as f:
                 json.dump(filtered_jobs, f, indent=2)
             logger.info(f"Saved {len(filtered_jobs)} filtered jobs")
         except Exception as e:
@@ -507,7 +507,7 @@ class JobApplicationAutomation:
         Returns:
             True if loading was successful, False otherwise.
         """
-        profile_path = "../data/candidate_profile.json"
+        profile_path = str(Path(CONFIG.data_dir) / "candidate_profile.json")
         
         try:
             # Check if profile file exists

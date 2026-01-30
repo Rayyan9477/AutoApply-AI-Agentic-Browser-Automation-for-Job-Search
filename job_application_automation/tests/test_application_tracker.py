@@ -1,36 +1,13 @@
 """
 Tests for application tracking functionality.
+
+Uses `test_app_tracker` fixture from conftest.py which provides an
+ApplicationTracker wired to an in-memory SQLite database.
 """
 import pytest
 from datetime import datetime
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from job_application_automation.src.models import Base
 from job_application_automation.src.application_tracker import ApplicationTracker
-from job_application_automation.src.database import get_db
-
-# Test database URL
-TEST_DB_URL = "sqlite:///:memory:"
-
-@pytest.fixture(scope="function")
-def test_app_tracker():
-    """Create test application tracker with in-memory database."""
-    # Create test engine
-    engine = create_engine(
-        TEST_DB_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool
-    )
-    
-    # Create tables
-    Base.metadata.create_all(bind=engine)
-    
-    # Create test tracker
-    tracker = ApplicationTracker()
-    
-    return tracker
 
 def test_add_application(test_app_tracker):
     """Test adding a new application."""

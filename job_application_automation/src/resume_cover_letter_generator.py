@@ -26,13 +26,14 @@ from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
 
 # Import configuration
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from job_application_automation.config.llama_config import LlamaConfig
+from job_application_automation.src.utils.path_utils import get_project_root, get_data_path, get_templates_dir, get_models_dir
+
+# Resolve project root for path references
+_project_root = str(get_project_root())
 
 # Set up logging with absolute path for the log file
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-log_file_path = os.path.join(project_root, "data", "resume_cover_letter_generator.log")
+log_file_path = str(get_data_path() / "resume_cover_letter_generator.log")
 
 # Ensure log directory exists
 os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -65,7 +66,7 @@ class CoverLetterTemplateManager:
     
     def __init__(self):
         """Initialize the template manager"""
-        self.templates_dir = Path("../templates")
+        self.templates_dir = get_templates_dir()
         self.template_paths = {
             CoverLetterTemplate.STANDARD: self.templates_dir / "cover_letter_template.docx",
             CoverLetterTemplate.CREATIVE: self.templates_dir / "cover_letter_creative_template.docx",
@@ -305,11 +306,11 @@ class ResumeGenerator:
         """Set up the LLM for resume and cover letter generation."""
         try:
             # Create models directory if it doesn't exist 
-            models_dir = os.path.join(project_root, "models")
+            models_dir = os.path.join(_project_root, "models")
             os.makedirs(models_dir, exist_ok=True)
 
             # Create data directories if they don't exist
-            output_dir = os.path.join(project_root, "data", "generated_cover_letters")
+            output_dir = os.path.join(_project_root, "data", "generated_cover_letters")
             os.makedirs(output_dir, exist_ok=True)
             
             # First check if API is available
@@ -331,10 +332,10 @@ class ResumeGenerator:
                 
             # Check if model file exists
             model_paths = [
-                os.path.join(project_root, "models", "llama-4-mevrick"),
-                os.path.join(project_root, "models", "llama-4-mevrick.gguf"),
-                os.path.join(project_root, "models", "llama-3-8b.gguf"),
-                os.path.join(project_root, "models", "llama-2-7b.gguf"),
+                os.path.join(_project_root, "models", "llama-4-mevrick"),
+                os.path.join(_project_root, "models", "llama-4-mevrick.gguf"),
+                os.path.join(_project_root, "models", "llama-3-8b.gguf"),
+                os.path.join(_project_root, "models", "llama-2-7b.gguf"),
                 os.path.join(os.path.expanduser("~"), ".cache", "models", "llama-4-mevrick.gguf"),
                 os.path.join(os.path.expanduser("~"), ".cache", "models", "llama-3-8b.gguf")
             ]
@@ -632,7 +633,7 @@ class ResumeGenerator:
             
             # Generate resume content using unified client for provider agility
             try:
-                from src.services.llm_client import LLMClient
+                from job_application_automation.src.services.llm_client import LLMClient
                 client = LLMClient(self.config)
                 resume_content = client.generate(
                     system_prompt="You are a helpful assistant specialized in writing professional resumes.",
@@ -646,7 +647,7 @@ class ResumeGenerator:
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 job_title = candidate_profile.get("target_job_title", "resume")
-                output_dir = os.path.join(project_root, "data", "generated_resumes")
+                output_dir = os.path.join(_project_root, "data", "generated_resumes")
                 os.makedirs(output_dir, exist_ok=True)
                 output_path = os.path.join(output_dir, f"{timestamp}_{job_title.replace(' ', '_')}.docx")
 
@@ -694,7 +695,7 @@ class ResumeGenerator:
             
             # Generate cover letter content using unified client for provider agility
             try:
-                from src.services.llm_client import LLMClient
+                from job_application_automation.src.services.llm_client import LLMClient
                 client = LLMClient(self.config)
                 cover_letter_content = client.generate(
                     system_prompt="You are a helpful assistant specialized in writing professional cover letters.",
@@ -708,7 +709,7 @@ class ResumeGenerator:
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 job_title = "cover_letter"
-                output_dir = os.path.join(project_root, "data", "generated_cover_letters")
+                output_dir = os.path.join(_project_root, "data", "generated_cover_letters")
                 os.makedirs(output_dir, exist_ok=True)
                 output_path = os.path.join(output_dir, f"{timestamp}_{job_title.replace(' ', '_')}.docx")
 
@@ -980,7 +981,7 @@ class ResumeGenerator:
         """
         try:
             # Create a new document or use template
-            template_path = os.path.join(project_root, "templates", "resume_template.docx")
+            template_path = os.path.join(_project_root, "templates", "resume_template.docx")
             
             # If template exists, use it
             if os.path.exists(template_path):

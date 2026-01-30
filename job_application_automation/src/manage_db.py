@@ -13,10 +13,10 @@ from alembic.config import Config
 import json
 import numpy as np
 
-from database import init_db, get_engine, check_database_connection, get_database_stats
-from models import Base, JobApplication, JobSkill, SearchHistory, VectorIndex
-from vector_database import vector_db, VectorDatabaseService
-from database_monitor import DatabaseMonitorService, vector_monitor
+from job_application_automation.src.database import init_db, get_engine, check_database_connection, get_database_stats
+from job_application_automation.src.models import Base, JobApplication, JobSkill, SearchHistory, VectorIndex
+from job_application_automation.src.vector_database import vector_db, VectorDatabaseService
+from job_application_automation.src.database_monitor import DatabaseMonitorService, vector_monitor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -203,8 +203,8 @@ def health():
     """Check current database health."""
     try:
         logger.info("Checking database health...")
-        from database import get_engine
-        from database_monitor import DatabaseMonitorService
+        from job_application_automation.src.database import get_engine
+        from job_application_automation.src.database_monitor import DatabaseMonitorService
         
         monitor_service = DatabaseMonitorService(get_engine())
         import asyncio
@@ -238,8 +238,8 @@ def slow_queries(days):
     """Show slow query report."""
     try:
         logger.info(f"Generating slow query report for the last {days} days...")
-        from database import get_engine
-        from database_monitor import DatabaseMonitorService
+        from job_application_automation.src.database import get_engine
+        from job_application_automation.src.database_monitor import DatabaseMonitorService
         
         monitor_service = DatabaseMonitorService(get_engine())
         report = monitor_service.get_slow_query_report(days)
@@ -265,8 +265,8 @@ def performance():
     """Show current database performance metrics."""
     try:
         logger.info("Getting database performance metrics...")
-        from database import get_engine
-        from database_monitor import DatabaseMonitorService
+        from job_application_automation.src.database import get_engine
+        from job_application_automation.src.database_monitor import DatabaseMonitorService
         
         monitor_service = DatabaseMonitorService(get_engine())
         metrics = monitor_service.get_performance_metrics()
@@ -293,8 +293,8 @@ def analyze():
     """Analyze query patterns and provide optimization recommendations."""
     try:
         logger.info("Analyzing query patterns...")
-        from database import get_engine
-        from database_monitor import DatabaseMonitorService, analyze_query_patterns
+        from job_application_automation.src.database import get_engine
+        from job_application_automation.src.database_monitor import DatabaseMonitorService, analyze_query_patterns
         
         analysis = analyze_query_patterns()
         
@@ -340,7 +340,7 @@ def create_index(index_name, dimension, type, entity_type):
         if success:
             # Store index information in SQL database
             from sqlalchemy.orm import Session
-            from database import get_db
+            from job_application_automation.src.database import get_db
             
             with get_db() as db:
                 index_record = VectorIndex(
@@ -373,7 +373,7 @@ def delete_index(index_name):
         if success:
             # Remove index from SQL database
             from sqlalchemy.orm import Session
-            from database import get_db
+            from job_application_automation.src.database import get_db
             
             with get_db() as db:
                 index_record = db.query(VectorIndex).filter_by(index_name=index_name).first()
@@ -394,7 +394,7 @@ def list_indices():
     """List all FAISS vector indices."""
     try:
         logger.info("Listing vector indices")
-        from database import get_db
+        from job_application_automation.src.database import get_db
         
         # Get indices from SQL database
         with get_db() as db:
@@ -440,7 +440,7 @@ def build_index(index_name, jobs, skills, searches, rebuild):
             logger.error(f"Index '{index_name}' does not exist. Create it first or use --rebuild")
             sys.exit(1)
             
-        from database import get_db
+        from job_application_automation.src.database import get_db
         
         if jobs:
             logger.info(f"Indexing job applications in '{index_name}'")
@@ -564,7 +564,7 @@ def search(index_name, query, limit, entity_type):
             
         logger.info(f"Found {len(results)} results:")
         
-        from database import get_db
+        from job_application_automation.src.database import get_db
         
         with get_db() as db:
             # Get entity type from index if not specified
@@ -600,8 +600,8 @@ def search(index_name, query, limit, entity_type):
 def stats():
     """Show vector database performance statistics."""
     try:
-        from database_monitor import DatabaseMonitorService, vector_monitor
-        from database import get_engine
+        from job_application_automation.src.database_monitor import DatabaseMonitorService, vector_monitor
+        from job_application_automation.src.database import get_engine
         
         monitor_service = DatabaseMonitorService(get_engine())
         stats = monitor_service.get_vector_db_metrics()
@@ -646,8 +646,8 @@ def stats():
 def export_stats(format, output):
     """Export vector database statistics to file."""
     try:
-        from database import get_engine
-        from database_monitor import DatabaseMonitorService
+        from job_application_automation.src.database import get_engine
+        from job_application_automation.src.database_monitor import DatabaseMonitorService
         
         monitor_service = DatabaseMonitorService(get_engine())
         filepath = monitor_service.export_vector_metrics(format=format, output_dir=output)

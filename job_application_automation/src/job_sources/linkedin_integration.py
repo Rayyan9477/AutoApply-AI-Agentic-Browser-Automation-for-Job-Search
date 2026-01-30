@@ -17,17 +17,15 @@ from functools import wraps
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Import configuration
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from job_application_automation.config.linkedin_mcp_config import LinkedInMCPConfig
 from job_application_automation.config.config import LinkedInConfig
+from job_application_automation.src.utils.path_utils import get_data_path
 
 # Import the compatibility module for LinkedIn MCP
 from .linkedin_mcp_compat import create_linkedin_mcp, is_linkedin_mcp_available
 
 # Set up logging with absolute path for the log file
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-log_file_path = os.path.join(project_root, "data", "linkedin_integration.log")
+log_file_path = str(get_data_path() / "linkedin_integration.log")
 
 # Ensure log directory exists
 os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -123,7 +121,7 @@ class LinkedInIntegration:
             self.config = config or LinkedInMCPConfig()
 
         # Create necessary directories
-        self.config.session_storage_path = os.path.join(project_root, "data", "sessions")
+        self.config.session_storage_path = str(get_data_path("sessions"))
         os.makedirs(self.config.session_storage_path, exist_ok=True)
         
         self._setup_mcp_server()
@@ -188,7 +186,7 @@ class LinkedInIntegration:
             logger.info("Found saved LinkedIn cookies, attempting to use them")
             try:
                 # Import required modules
-                from src.utils.browser_automation import JobSearchBrowser
+                from job_application_automation.src.utils.browser_automation import JobSearchBrowser
                 from job_application_automation.config.browser_config import BrowserConfig
                 
                 # Create custom browser config with headless mode initially disabled
@@ -214,8 +212,8 @@ class LinkedInIntegration:
             logger.info("No valid authentication found, attempting manual login")
             
             # Import required modules for browser automation
-            from src.utils.browser_automation import JobSearchBrowser
-            from config.browser_config import BrowserConfig
+            from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+            from job_application_automation.config.browser_config import BrowserConfig
             
             # Create custom browser config with headless mode disabled for manual login
             browser_config = BrowserConfig()
@@ -323,8 +321,8 @@ class LinkedInIntegration:
         """
         try:
             # Import the web scraper dynamically to avoid circular imports
-            from src.utils.browser_automation import JobSearchBrowser
-            from config.browser_config import BrowserConfig
+            from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+            from job_application_automation.config.browser_config import BrowserConfig
             
             # Initialize the browser
             browser = JobSearchBrowser(BrowserConfig())
@@ -435,7 +433,7 @@ class LinkedInIntegration:
             job_listings: List of job listings to save.
         """
         try:
-            output_file = "../data/linkedin_job_listings.json"
+            output_file = str(get_data_path() / "linkedin_job_listings.json")
             with open(output_file, "w") as f:
                 json.dump(job_listings, f, indent=2)
                 
@@ -456,7 +454,7 @@ class LinkedInIntegration:
         """
         try:
             # Import web scraping module dynamically
-            from src.utils.web_scraping import JobDetailsScraper
+            from job_application_automation.src.utils.web_scraping import JobDetailsScraper
             
             # Create URL for the job
             job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
@@ -500,7 +498,7 @@ class LinkedInIntegration:
         """
         try:
             # Define path to candidate profile JSON
-            profile_path = os.path.join(project_root, "data", "candidate_profile.json")
+            profile_path = str(get_data_path() / "candidate_profile.json")
             
             # Check if file exists
             if not os.path.exists(profile_path):
@@ -575,8 +573,8 @@ class LinkedInIntegration:
                 return False
                 
             # Import the browser automation module dynamically
-            from src.utils.browser_automation import JobSearchBrowser
-            from config.browser_config import BrowserConfig
+            from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+            from job_application_automation.config.browser_config import BrowserConfig
             
             # Create the job URL
             job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
@@ -739,7 +737,7 @@ class LinkedInIntegration:
                 company_info = f"{company_name} is a company hiring for a {job_title} position."
             
             # Import the resume generator dynamically to avoid circular imports
-            from src.resume_cover_letter_generator import ResumeGenerator, CoverLetterTemplate
+            from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator, CoverLetterTemplate
             
             # Create resume generator
             resume_generator = ResumeGenerator()

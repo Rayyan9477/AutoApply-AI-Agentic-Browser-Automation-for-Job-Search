@@ -173,13 +173,13 @@ def configure_container(config: dict) -> None:
     """
     from job_application_automation.config.config import ApplicationConfig, get_config
     
-    # Import services using relative imports since we're in the src directory
-    from src.utils.browser_automation import JobSearchBrowser
-    from src.utils.web_scraping import JobDetailsScraper
-    from src.job_sources.linkedin_integration import LinkedInIntegration
-    from src.resume_cover_letter_generator import ResumeGenerator
-    from src.application_tracker import ApplicationTracker
-    from src.ats_integration import ATSIntegrationManager
+    # Import services
+    from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+    from job_application_automation.src.utils.web_scraping import JobDetailsScraper
+    from job_application_automation.src.job_sources.linkedin_integration import LinkedInIntegration
+    from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
+    from job_application_automation.src.application_tracker import ApplicationTracker
+    from job_application_automation.src.ats_integration import ATSIntegrationManager
     
     # Bind configuration
     if not isinstance(config, ApplicationConfig):

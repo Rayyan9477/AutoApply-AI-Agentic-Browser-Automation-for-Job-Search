@@ -12,19 +12,21 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from sqlalchemy.exc import IntegrityError
 
-# Fix relative imports by using absolute imports
-from src.database import get_db, execute_with_retry
-from src.models import JobApplication, ApplicationInteraction, JobSkill, SearchHistory, VectorIndex
-from src.vector_database import vector_db, time_vector_operation
+# Absolute imports
+from job_application_automation.src.database import get_db, execute_with_retry
+from job_application_automation.src.models import JobApplication, ApplicationInteraction, JobSkill, SearchHistory, VectorIndex
+from job_application_automation.src.vector_database import vector_db, time_vector_operation
 from job_application_automation.config.logging_config import AuditLogger
-from src.database_errors import handle_db_errors, with_retry, safe_commit, DatabaseError
+from job_application_automation.src.database_errors import handle_db_errors, with_retry, safe_commit, DatabaseError
 
 # Set up logging
+from job_application_automation.src.utils.path_utils import get_data_path as _get_data_path
+_log_dir = _get_data_path("logs")
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("../data/logs/application_tracker.log"),
+        logging.FileHandler(str(_log_dir / "application_tracker.log")),
         logging.StreamHandler()
     ]
 )

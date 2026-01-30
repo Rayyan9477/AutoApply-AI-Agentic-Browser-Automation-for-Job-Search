@@ -10,15 +10,13 @@ This script sets up the complete project environment, including:
 """
 
 import os
-import sys
 import shutil
 import subprocess
 from pathlib import Path
 import logging
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+from job_application_automation.src.utils.path_utils import get_project_root
+project_root = get_project_root()
 
 def setup_logging():
     """Set up logging for the initialization process."""
@@ -88,8 +86,8 @@ def initialize_database():
         os.chdir(project_root)
         
         # Import database modules
-        from src.database import init_db, get_engine
-        from src.models import Base
+        from job_application_automation.src.database import init_db, get_engine
+        from job_application_automation.src.models import Base
         
         # Initialize database
         init_db()
