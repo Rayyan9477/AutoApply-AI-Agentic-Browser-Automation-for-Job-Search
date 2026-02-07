@@ -7,16 +7,14 @@ to ensure everything is working correctly.
 """
 
 import os
-import sys
 import asyncio
 import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, List
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+from job_application_automation.src.utils.path_utils import get_project_root
+project_root = get_project_root()
 
 def setup_logging():
     """Set up logging for the test process."""
@@ -80,15 +78,15 @@ class SystemTester:
         """Test that all modules can be imported."""
         try:
             # Test core imports
-            from src.database import init_db, get_engine
-            from src.models import Base, JobApplication
-            from src.application_tracker import ApplicationTracker
-            from src.resume_optimizer import ATSScorer, ResumeOptimizer
-            from src.ats_integration import ATSIntegrationManager
-            from src.vector_database import VectorDatabaseService
-            from config.config import get_config
-            from config.gemini_config import GeminiConfig
-            from config.logging_config import configure_logging
+            from job_application_automation.src.database import init_db, get_engine
+            from job_application_automation.src.models import Base, JobApplication
+            from job_application_automation.src.application_tracker import ApplicationTracker
+            from job_application_automation.src.resume_optimizer import ATSScorer, ResumeOptimizer
+            from job_application_automation.src.ats_integration import ATSIntegrationManager
+            from job_application_automation.src.vector_database import VectorDatabaseService
+            from job_application_automation.config.config import get_config
+            from job_application_automation.config.gemini_config import GeminiConfig
+            from job_application_automation.config.logging_config import configure_logging
             
             return True
         except ImportError as e:
@@ -98,10 +96,10 @@ class SystemTester:
     def test_configuration(self):
         """Test configuration loading."""
         try:
-            from config.config import get_config
-            
+            from job_application_automation.config.config import get_config
+
             config = get_config()
-            
+
             # Check that config has required attributes
             required_attrs = ['browser', 'logging', 'linkedin', 'crawl', 'llm', 'security']
             for attr in required_attrs:
@@ -119,7 +117,7 @@ class SystemTester:
     def test_database_connection(self):
         """Test database connection and initialization."""
         try:
-            from src.database import init_db, get_engine, check_database_connection
+            from job_application_automation.src.database import init_db, get_engine, check_database_connection
             
             # Initialize database
             init_db()
@@ -140,10 +138,10 @@ class SystemTester:
     def test_application_tracker(self):
         """Test application tracking functionality."""
         try:
-            from src.application_tracker import ApplicationTracker
-            
+            from job_application_automation.src.application_tracker import ApplicationTracker
+
             tracker = ApplicationTracker()
-            
+
             # Test adding an application
             test_app = tracker.add_application(
                 job_id="test_job_123",
@@ -169,7 +167,7 @@ class SystemTester:
     def test_resume_optimizer(self):
         """Test resume optimization functionality."""
         try:
-            from src.resume_optimizer import ATSScorer
+            from job_application_automation.src.resume_optimizer import ATSScorer
             
             scorer = ATSScorer()
             
@@ -201,7 +199,7 @@ class SystemTester:
     def test_vector_database(self):
         """Test vector database functionality."""
         try:
-            from src.vector_database import VectorDatabaseService
+            from job_application_automation.src.vector_database import VectorDatabaseService
             
             vector_db = VectorDatabaseService()
             
@@ -238,8 +236,8 @@ class SystemTester:
     async def test_gemini_integration(self):
         """Test Gemini API integration."""
         try:
-            from src.llm_providers.gemini_provider import GeminiProvider
-            from config.gemini_config import GeminiConfig
+            from job_application_automation.src.llm_providers.gemini_provider import GeminiProvider
+            from job_application_automation.config.gemini_config import GeminiConfig
             
             # Create test config
             config = GeminiConfig()

@@ -2,23 +2,19 @@
 Unit tests for the LinkedIn integration module.
 """
 import os
-import sys
 import pytest
 import json
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime, timedelta
 
-# Add project root to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.job_sources.linkedin_integration import (
+from job_application_automation.src.job_sources.linkedin_integration import (
     LinkedInIntegration,
     LinkedInAuthError,
     LinkedInRateLimitError,
     LinkedInNetworkError
 )
-from src.linkedin_mcp_compat import MockLinkedInMCP, MockMCPConfig
+from job_application_automation.src.job_sources.linkedin_mcp_compat import MockLinkedInMCP, MockMCPConfig
 
 
 class TestLinkedInIntegration:
@@ -101,8 +97,8 @@ class TestLinkedInIntegration:
             ]
         }
 
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     def test_init(self, mock_create_mcp, mock_is_available, mock_config):
         """Test initialization of LinkedIn integration."""
         mock_is_available.return_value = True
@@ -115,8 +111,8 @@ class TestLinkedInIntegration:
         assert linkedin.access_token is None
         assert linkedin.token_expiry is None
 
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     def test_init_no_api_credentials(self, mock_create_mcp, mock_is_available, mock_config):
         """Test initialization without API credentials."""
         mock_config.client_id = ""
@@ -129,8 +125,8 @@ class TestLinkedInIntegration:
         mock_create_mcp.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     @patch("os.path.exists")
     @patch("builtins.open", new_callable=MagicMock)
     async def test_is_token_valid(self, mock_open, mock_path_exists, mock_create_mcp, mock_is_available, mock_config):
@@ -152,8 +148,8 @@ class TestLinkedInIntegration:
         assert linkedin.access_token == "test_token"
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     @patch("os.path.exists")
     async def test_is_token_valid_expired(self, mock_path_exists, mock_create_mcp, mock_is_available, mock_config):
         """Test expired token validation."""
@@ -170,9 +166,9 @@ class TestLinkedInIntegration:
         assert is_valid is False
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
-    @patch("src.linkedin_integration.JobSearchBrowser")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.JobSearchBrowser")
     async def test_search_jobs(self, mock_browser_class, mock_create_mcp, mock_is_available, mock_config, mock_job):
         """Test job search functionality."""
         mock_is_available.return_value = True
@@ -201,9 +197,9 @@ class TestLinkedInIntegration:
         linkedin._save_job_listings.assert_called_once_with([mock_job])
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
-    @patch("src.linkedin_integration.JobDetailsScraper")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.JobDetailsScraper")
     async def test_get_job_description(self, mock_scraper_class, mock_create_mcp, mock_is_available, mock_config, mock_job):
         """Test getting job description."""
         mock_is_available.return_value = True
@@ -232,8 +228,8 @@ class TestLinkedInIntegration:
         mock_scraper.scrape_job_details.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     @patch("os.path.exists")
     @patch("builtins.open", new_callable=MagicMock)
     @patch("json.load")
@@ -287,9 +283,9 @@ class TestLinkedInIntegration:
         mock_open.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
-    @patch("src.linkedin_integration.JobSearchBrowser")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.JobSearchBrowser")
     async def test_apply_to_job(self, mock_browser_class, mock_create_mcp, mock_is_available, mock_config):
         """Test applying to a job."""
         mock_is_available.return_value = True
@@ -318,8 +314,8 @@ class TestLinkedInIntegration:
         linkedin._check_rate_limit_applications.assert_called_once()
         linkedin._update_application_history.assert_called_once_with("test_job_123")
 
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     @patch("os.path.exists")
     @patch("builtins.open", new_callable=MagicMock)
     @patch("json.load")
@@ -358,8 +354,8 @@ class TestLinkedInIntegration:
         assert result is False
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     async def test_transform_profile_to_candidate(self, mock_create_mcp, mock_is_available, 
                                          mock_config, mock_user_profile):
         """Test transforming LinkedIn profile to candidate format."""
@@ -382,8 +378,8 @@ class TestLinkedInIntegration:
         assert len(candidate["education"]) == 1
 
     @pytest.mark.asyncio
-    @patch("src.linkedin_mcp_compat.is_linkedin_mcp_available")
-    @patch("src.linkedin_integration.create_linkedin_mcp")
+    @patch("job_application_automation.src.job_sources.linkedin_mcp_compat.is_linkedin_mcp_available")
+    @patch("job_application_automation.src.job_sources.linkedin_integration.create_linkedin_mcp")
     async def test_full_application_workflow(self, mock_create_mcp, mock_is_available, mock_config, mock_job):
         """Test the full application workflow."""
         mock_is_available.return_value = True

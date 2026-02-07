@@ -10,10 +10,11 @@ import numpy as np
 from pathlib import Path
 from typing import List, Dict
 from sentence_transformers import SentenceTransformer
-from src.resume_cover_letter_generator import ResumeGenerator
+from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
+from job_application_automation.src.utils.path_utils import get_data_path
 
 # Paths for vector store and metadata
-DATA_DIR = Path("../data")
+DATA_DIR = get_data_path()
 INDEX_PATH = DATA_DIR / "faiss_index.idx"
 META_PATH = DATA_DIR / "faiss_meta.json"
 

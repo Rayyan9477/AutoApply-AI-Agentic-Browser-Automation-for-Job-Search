@@ -5,7 +5,6 @@ This module provides a simple CLI for scoring and optimizing resumes against job
 """
 
 import os
-import sys
 import argparse
 import logging
 import json
@@ -13,27 +12,26 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-# Add project root to sys.path before any imports of project modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 # Import project modules
-from src.resume_optimizer import ATSScorer, ResumeOptimizer
-from src.ats_integration import ATSIntegrationManager
+from job_application_automation.src.resume_optimizer import ATSScorer, ResumeOptimizer
+from job_application_automation.src.ats_integration import ATSIntegrationManager
 from job_application_automation.config.llama_config import LlamaConfig
+from job_application_automation.src.utils.path_utils import get_data_path
 
 # Set up logging
+_data_dir = get_data_path()
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("../data/ats_cli.log"),
+        logging.FileHandler(str(_data_dir / "ats_cli.log")),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Define paths
-DATA_DIR = Path("../data")
+DATA_DIR = _data_dir
 JOBS_DIR = DATA_DIR / "job_descriptions"
 RESUMES_DIR = DATA_DIR / "resumes"
 

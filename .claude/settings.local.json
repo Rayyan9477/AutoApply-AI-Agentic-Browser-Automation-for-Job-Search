@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(python -c:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(pip show:*)",
+      "Bash(PYTHONPATH=\".\" python -m pytest:*)",
+      "Bash(PYTHONPATH=\".\" python:*)",
+      "Bash(PYTHONPATH=\".\" python -c \"from job_application_automation.src.utils.path_utils import get_project_root, get_data_path, get_templates_dir, get_logs_dir, get_models_dir; print\\(''Path Utils OK:'', get_project_root\\(\\)\\)\")",
+      "Bash(set \"PYTHONPATH=.\")",
+      "Bash(python -m pytest:*)"
+    ]
+  }
+}

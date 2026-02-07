@@ -11,14 +11,14 @@ import logging
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-from browser_automation import JobSearchBrowser
-from web_scraping import JobDetailsScraper
-from linkedin_integration import LinkedInIntegration
-from resume_cover_letter_generator import ResumeGenerator
-from application_tracker import ApplicationTracker
-from ats_integration import ATSIntegrationManager
-from utils.path_utils import ensure_dir
-from utils.error_handling import with_retry
+from job_application_automation.src.utils.browser_automation import JobSearchBrowser
+from job_application_automation.src.utils.web_scraping import JobDetailsScraper
+from job_application_automation.src.job_sources.linkedin_integration import LinkedInIntegration
+from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
+from job_application_automation.src.application_tracker import ApplicationTracker
+from job_application_automation.src.ats_integration import ATSIntegrationManager
+from job_application_automation.src.utils.path_utils import ensure_dir
+from job_application_automation.src.utils.error_handling import with_retry
 from job_application_automation.config.config import get_config
 
 # Get configuration

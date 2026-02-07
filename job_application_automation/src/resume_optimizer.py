@@ -20,23 +20,17 @@ import pandas as pd
 import requests
 
 # Import project modules
-try:
-    # When imported as a module
-    from src.resume_cover_letter_generator import ResumeGenerator
-    from job_application_automation.config.llama_config import LlamaConfig
-except ImportError:
-    # When run directly
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from resume_cover_letter_generator import ResumeGenerator
-    from job_application_automation.config.llama_config import LlamaConfig
+from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
+from job_application_automation.config.llama_config import LlamaConfig
+from job_application_automation.src.utils.path_utils import get_project_root, get_data_path
 
 # Set up logging
+_data_dir = get_data_path()
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("../data/resume_optimizer.log"),
+        logging.FileHandler(str(_data_dir / "resume_optimizer.log")),
         logging.StreamHandler()
     ]
 )
@@ -51,7 +45,7 @@ except (ImportError, OSError):
     SPACY_AVAILABLE = False
 
 # Define paths
-DATA_DIR = Path("../data")
+DATA_DIR = _data_dir
 ATS_INDEX_PATH = DATA_DIR / "ats_index.idx"
 ATS_META_PATH = DATA_DIR / "ats_meta.json"
 
@@ -93,6 +87,13 @@ class ATSScorer:
                     logger.warning("No local model found. Using fallback text comparison.")
             except Exception as local_error:
                 logger.error(f"Failed to load local model: {local_error}")
+        
+        # Set flag for embedding availability
+        if self.embedding_model is None:
+            logger.error("Failed to load embedding model - semantic features disabled")
+            self.embedding_disabled = True
+        else:
+            self.embedding_disabled = False
                 
         # Initialize FAISS index for resume-job matching
         self._setup_vector_index()
@@ -222,8 +223,8 @@ class ATSScorer:
                 try:
                     import PyPDF2
                     with open(file_path, 'rb') as f:
-                        reader = PyPDF2.PdfFileReader(f)
-                        text = ' '.join(reader.getPage(i).extractText() for i in range(reader.numPages))
+                        reader = PyPDF2.PdfReader(f)
+                        text = ' '.join(page.extract_text() for page in reader.pages)
                         return text
                 except ImportError:
                     logger.warning("PyPDF2 not installed. Cannot read PDF files.")
@@ -683,6 +684,17 @@ class ATSScorer:
         
         # Generate embeddings with model if available
         try:
+            if self.embedding_disabled or self.embedding_model is None:
+                logger.warning("Embedding model not available, using keyword-only scoring")
+                # Fallback to keyword-based scoring
+                resume_keywords = set(resume_text.lower().split())
+                job_keywords = set(job_description.lower().split())
+                intersection = resume_keywords.intersection(job_keywords)
+                union = resume_keywords.union(job_keywords)
+                if not union:
+                    return 0.5
+                return float(len(intersection) / len(union))
+            
             resume_embedding = self.embedding_model.encode(resume_text)
             job_embedding = self.embedding_model.encode(job_description)
             
@@ -822,6 +834,11 @@ class ATSScorer:
             # Create combined text for embedding
             combined_text = f"{resume_text}\n{job_description}"
             
+            # Check if embedding model is available
+            if self.embedding_disabled or self.embedding_model is None:
+                logger.warning("Embedding model not available, skipping index addition")
+                return
+            
             # Generate embedding
             embedding = self.embedding_model.encode(combined_text)
             vec = embedding.reshape(1, -1).astype('float32')
@@ -849,6 +866,11 @@ class ATSScorer:
     def find_similar_resumes(self, job_description: str, k: int = 5) -> List[Dict[str, Any]]:
         """Find resumes that performed well for similar job descriptions."""
         try:
+            # Check if embedding model is available
+            if self.embedding_disabled or self.embedding_model is None:
+                logger.warning("Embedding model not available, returning empty results")
+                return []
+            
             # Embed the job description
             job_embedding = self.embedding_model.encode(job_description)
             job_vec = job_embedding.reshape(1, -1).astype('float32')
@@ -1154,7 +1176,7 @@ class ResumeOptimizer:
         
         # Use unified LLM client for provider agility; fallback to existing paths
         try:
-            from src.services.llm_client import LLMClient
+            from job_application_automation.src.services.llm_client import LLMClient
             client = LLMClient(getattr(self, 'llama_config', None))
             result = client.generate(system_prompt=system_prompt, user_prompt=prompt, max_tokens=1200)
             if not result:

@@ -2,17 +2,13 @@
 Unit tests for the configuration system.
 """
 import os
-import sys
 import pytest
 from pathlib import Path
-
-# Add project root to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import tempfile
 import yaml
 from typing import Dict, Any
-from config.config import ConfigManager, ApplicationConfig, LinkedInConfig, BrowserConfig
+
+from job_application_automation.config.config import ConfigManager, ApplicationConfig, LinkedInConfig, BrowserConfig
 
 class TestConfigManager:
     """Tests for the ConfigManager class."""

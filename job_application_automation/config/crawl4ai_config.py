@@ -2,9 +2,12 @@
 Configuration settings for web scraping using Crawl4AI.
 """
 import os
+from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Literal, Any
 from dotenv import load_dotenv
+
+_CRAWL_CONFIG_ROOT = Path(__file__).resolve().parent.parent
 
 # Load environment variables
 load_dotenv()
@@ -128,14 +131,14 @@ class Crawl4AIConfig(BaseModel):
     
     # Question answering settings
     answer_questions: bool = True
-    question_model_path: str = "../models/qa_model"
-    question_templates_path: str = "../data/question_templates.json"
-    
+    question_model_path: str = str(_CRAWL_CONFIG_ROOT / "models" / "qa_model")
+    question_templates_path: str = str(_CRAWL_CONFIG_ROOT / "data" / "question_templates.json")
+
     # Output settings
     output_format: Literal["markdown", "json", "html"] = "markdown"
-    output_dir: str = "../data"
-    job_listings_file: str = "../data/job_listings.json"
-    scraped_job_details_file: str = "../data/scraped_job_details.json"
+    output_dir: str = str(_CRAWL_CONFIG_ROOT / "data")
+    job_listings_file: str = str(_CRAWL_CONFIG_ROOT / "data" / "job_listings.json")
+    scraped_job_details_file: str = str(_CRAWL_CONFIG_ROOT / "data" / "scraped_job_details.json")
     
     # Memory settings
     memory_adaptive_dispatcher: bool = True

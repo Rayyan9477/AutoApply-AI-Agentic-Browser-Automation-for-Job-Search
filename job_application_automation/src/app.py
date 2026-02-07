@@ -5,7 +5,7 @@ import os
 
 def api_app():
     # Lazy import to avoid heavy imports on module load
-    from src.interfaces.api import create_app
+    from job_application_automation.src.interfaces.api import create_app
 
     return create_app()
 

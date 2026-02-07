@@ -38,7 +38,7 @@ use_browser = st.checkbox("Use Browser Automation", value=False)
 job_site = st.selectbox("Job Site", options=["linkedin", "indeed", "glassdoor"], index=0)
 
 if st.button("Search"):
-    from src.main import JobApplicationAutomation
+    from job_application_automation.src.main import JobApplicationAutomation
     import asyncio
 
     async def run():
@@ -74,7 +74,7 @@ if st.button("Generate Documents"):
         profile = None
 
     if profile and job_desc.strip():
-        from src.resume_cover_letter_generator import ResumeGenerator
+        from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
 
         gen = ResumeGenerator()
         resume_path, resume_content = gen.generate_resume(job_description=job_desc, candidate_profile=profile)

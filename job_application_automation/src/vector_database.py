@@ -13,7 +13,7 @@ from datetime import datetime
 from functools import lru_cache, wraps
 import time
 from sentence_transformers import SentenceTransformer
-from src.database_errors import handle_db_errors, with_retry
+from job_application_automation.src.database_errors import handle_db_errors, with_retry
 from job_application_automation.config.config import get_config
 
 # Set up logging

@@ -2,9 +2,12 @@
 Configuration settings for browser automation.
 """
 import os
+from pathlib import Path
 from typing import Optional, Dict
 from pydantic import BaseModel, Field, validator
 from dotenv import load_dotenv
+
+_BROWSER_CONFIG_ROOT = Path(__file__).resolve().parent.parent
 
 # Load environment variables
 load_dotenv()
@@ -89,7 +92,7 @@ class BrowserConfig(BaseModel):
         description="Save browser session for reuse"
     )
     session_dir: str = Field(
-        default=os.getenv("SESSION_DIR", "../data/sessions"),
+        default=os.getenv("SESSION_DIR", str(_BROWSER_CONFIG_ROOT / "data" / "sessions")),
         description="Directory to store browser sessions"
     )
     
@@ -110,7 +113,23 @@ class BrowserConfig(BaseModel):
         default=float(os.getenv("MAX_DELAY", "3.0")),
         description="Maximum delay between actions in seconds"
     )
-    
+
+    # Screenshots directory
+    screenshots_dir: str = Field(
+        default=os.getenv("SCREENSHOTS_DIR", "data/screenshots"),
+        description="Directory to store browser screenshots"
+    )
+
+    # Aliases for backward compatibility
+    default_navigation_timeout: int = Field(
+        default=int(os.getenv("DEFAULT_NAVIGATION_TIMEOUT", "30000")),
+        description="Default navigation timeout in milliseconds"
+    )
+    default_timeout: int = Field(
+        default=int(os.getenv("DEFAULT_TIMEOUT", "30000")),
+        description="Default timeout in milliseconds (alias for timeout)"
+    )
+
     @validator('browser_type')
     def validate_browser_type(cls, v):
         """Validate browser type."""

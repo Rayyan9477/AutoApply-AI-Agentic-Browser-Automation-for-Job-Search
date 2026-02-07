@@ -14,13 +14,11 @@ import httpx
 from bs4 import BeautifulSoup
 
 # Import configuration
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from job_application_automation.config.crawl4ai_config import Crawl4AIConfig
+from job_application_automation.src.utils.path_utils import get_data_path
 
 # Set up logging with absolute path for the log file
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-log_file_path = os.path.join(project_root, "data", "web_scraping.log")
+log_file_path = str(get_data_path() / "web_scraping.log")
 
 # Ensure log directory exists
 os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -144,7 +142,7 @@ class JobDetailsScraper:
 async def main():
     # Load job listings from a file
     try:
-        with open("../data/job_listings.json", "r") as f:
+        with open(str(get_data_path() / "job_listings.json"), "r") as f:
             job_listings = json.load(f)
     except Exception as e:
         logger.error(f"Error loading job listings: {e}")

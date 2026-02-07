@@ -2,19 +2,15 @@
 Alembic migration environment configuration.
 """
 import os
-import sys
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
 
-# Add parent directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 # Import SQLAlchemy models and Base
-from src.models import Base
-from src.database import get_engine
+from job_application_automation.src.models import Base
+from job_application_automation.src.database import get_engine
 
 # Load alembic.ini configuration
 config = context.config

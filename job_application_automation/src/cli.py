@@ -8,7 +8,6 @@ application tracking, and more.
 """
 
 import os
-import sys
 import argparse
 import logging
 import asyncio
@@ -18,18 +17,13 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import webbrowser
 
-# Add project root to path for imports
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
 # Import project modules
-from src.main import JobApplicationAutomation
-from src.smart_apply import SmartJobApplicant
-from src.ats_cli import analyze_resume, batch_analyze_resumes
-from src.manage_db import cli as db_cli
-from src.application_tracker import ApplicationTracker
-from job_application_automation.config.config import get_config  # fallback if executed from package root
+from job_application_automation.src.main import JobApplicationAutomation
+from job_application_automation.src.smart_apply import SmartJobApplicant
+from job_application_automation.src.ats_cli import analyze_resume, batch_analyze_resumes
+from job_application_automation.src.manage_db import cli as db_cli
+from job_application_automation.src.application_tracker import ApplicationTracker
+from job_application_automation.config.config import get_config
 from job_application_automation.config.logging_config import configure_logging
 
 # Configure logging

@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import asyncio
 
-from src.main import JobApplicationAutomation
-from src.resume_cover_letter_generator import ResumeGenerator
+from job_application_automation.src.main import JobApplicationAutomation
+from job_application_automation.src.resume_cover_letter_generator import ResumeGenerator
 
 
 def create_app() -> FastAPI:
