@@ -1,0 +1,56 @@
+/* Standard Cover Letter — Clean business letter format */
+
+@page {
+    size: letter;
+    margin: 1in;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 12pt;
+    line-height: 1.7;
+    color: #222;
+    background: #fff;
+}
+
+.letter {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.date {
+    font-size: 11pt;
+    color: #555;
+    margin-bottom: 24px;
+}
+
+.recipient {
+    margin-bottom: 24px;
+    font-size: 11pt;
+    color: #333;
+}
+
+.recipient p {
+    margin-bottom: 2px;
+}
+
+.body {
+    font-size: 12pt;
+    color: #222;
+    line-height: 1.75;
+}
+
+.body p {
+    margin-bottom: 14px;
+    text-indent: 0;
+}
+
+.body p:first-child {
+    margin-top: 0;
+}

@@ -1,0 +1,72 @@
+/* Technical Cover Letter — Structured with tech highlights */
+
+@page {
+    size: letter;
+    margin: 0.85in 1in;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #2d3748;
+    background: #fff;
+}
+
+.letter {
+    max-width: 660px;
+    margin: 0 auto;
+}
+
+.header {
+    margin-bottom: 8px;
+}
+
+.date {
+    font-size: 10pt;
+    color: #718096;
+    margin-bottom: 4px;
+}
+
+.company {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #1a365d;
+}
+
+.accent-line {
+    height: 3px;
+    background: linear-gradient(90deg, #2b6cb0, #4299e1, transparent);
+    margin: 12px 0 20px;
+    border-radius: 2px;
+}
+
+.body {
+    font-size: 11pt;
+    color: #2d3748;
+    line-height: 1.7;
+}
+
+.body p {
+    margin-bottom: 14px;
+}
+
+.body code,
+.body .tech {
+    font-family: 'Consolas', 'Courier New', monospace;
+    background: #edf2f7;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10pt;
+    color: #2b6cb0;
+}
+
+.body strong {
+    color: #1a365d;
+}

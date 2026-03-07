@@ -1,0 +1,91 @@
+/* Creative Cover Letter — Visual accents, modern feel */
+
+@page {
+    size: letter;
+    margin: 0;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.65;
+    color: #2d3748;
+    background: #fff;
+}
+
+.letter {
+    padding: 0 60px 48px;
+    min-height: 100vh;
+    position: relative;
+}
+
+/* Top accent bar */
+.top-accent {
+    height: 6px;
+    margin: 0 -60px 36px;
+    background: linear-gradient(90deg, #6b46c1, #319795, #d69e2e);
+}
+
+/* Header */
+.header {
+    margin-bottom: 28px;
+}
+
+.date {
+    font-size: 10pt;
+    color: #a0aec0;
+    margin-bottom: 6px;
+}
+
+.company {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #6b46c1;
+    letter-spacing: 0.5px;
+}
+
+/* Body */
+.body {
+    font-size: 11pt;
+    color: #2d3748;
+    line-height: 1.75;
+}
+
+.body p {
+    margin-bottom: 16px;
+}
+
+.body p:first-child::first-letter {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #6b46c1;
+    float: left;
+    line-height: 1;
+    margin-right: 6px;
+    margin-top: 3px;
+}
+
+.body strong {
+    color: #319795;
+}
+
+.body em {
+    color: #6b46c1;
+    font-style: italic;
+}
+
+/* Bottom accent */
+.bottom-accent {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #d69e2e, #319795, #6b46c1);
+}

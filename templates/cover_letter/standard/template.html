@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cover Letter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="letter">
+        {% if date %}
+        <p class="date">{{ date }}</p>
+        {% endif %}
+
+        {% if company %}
+        <div class="recipient">
+            <p>{{ company }}</p>
+        </div>
+        {% endif %}
+
+        <div class="body">
+            {{ content }}
+        </div>
+    </div>
+</body>
+</html>

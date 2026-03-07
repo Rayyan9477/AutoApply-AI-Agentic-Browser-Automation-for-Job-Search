@@ -1,0 +1,156 @@
+/* Classic Resume Template — Single column, serif fonts, horizontal rules */
+
+@page {
+    size: letter;
+    margin: 0.75in 1in;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #111;
+    background: #fff;
+}
+
+.resume {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 40px 0;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.header h1 {
+    font-size: 22pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #000;
+    margin-bottom: 6px;
+}
+
+.contact-line {
+    font-size: 9.5pt;
+    color: #444;
+}
+
+.contact-line span {
+    display: inline;
+}
+
+.contact-line span::after {
+    content: " \00b7 ";
+    color: #999;
+}
+
+.contact-line span:last-child::after {
+    content: "";
+}
+
+/* Dividers */
+.divider {
+    border: none;
+    border-top: 2px solid #000;
+    margin: 12px 0 20px;
+}
+
+.section-rule {
+    border: none;
+    border-top: 1px solid #999;
+    margin: 4px 0 12px;
+}
+
+/* Sections */
+.section {
+    margin-bottom: 20px;
+}
+
+.section h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #000;
+}
+
+.summary-text {
+    font-size: 10pt;
+    color: #333;
+    line-height: 1.6;
+    font-style: italic;
+}
+
+/* Entries (experience, education) */
+.entry {
+    margin-bottom: 14px;
+}
+
+.entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.entry-left {
+    display: flex;
+    flex-direction: column;
+}
+
+.entry-title {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #000;
+}
+
+.entry-org {
+    font-size: 10pt;
+    font-style: italic;
+    color: #444;
+}
+
+.entry-date {
+    font-size: 9.5pt;
+    color: #666;
+    white-space: nowrap;
+}
+
+.entry-bullets {
+    list-style-type: disc;
+    margin-left: 20px;
+    margin-top: 4px;
+}
+
+.entry-bullets li {
+    font-size: 10pt;
+    color: #333;
+    margin-bottom: 2px;
+}
+
+/* Skills */
+.skills-list {
+    font-size: 10pt;
+    color: #333;
+    line-height: 1.6;
+}
+
+.cert-list {
+    list-style-type: disc;
+    margin-left: 20px;
+}
+
+.cert-list li {
+    font-size: 10pt;
+    color: #333;
+    margin-bottom: 2px;
+}
