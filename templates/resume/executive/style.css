@@ -1,0 +1,243 @@
+/* Executive Resume Template — Large name header, navy/gold, achievement-focused */
+
+@page {
+    size: letter;
+    margin: 0;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Garamond', 'Georgia', serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #1a202c;
+    background: #fff;
+}
+
+.resume {
+    padding: 0;
+    min-height: 100vh;
+}
+
+/* Header */
+.header-bg {
+    background: #1b2a4a;
+    padding: 36px 48px 28px;
+    text-align: center;
+}
+
+.header-bg h1 {
+    font-size: 30pt;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.header-bg .title {
+    font-size: 13pt;
+    color: #d4a853;
+    font-weight: 400;
+    letter-spacing: 1px;
+}
+
+.contact-bar {
+    background: #d4a853;
+    padding: 8px 48px;
+    text-align: center;
+    font-size: 9pt;
+    color: #1b2a4a;
+    font-weight: 600;
+}
+
+.contact-bar span::after {
+    content: "  |  ";
+    color: #1b2a4a80;
+}
+
+.contact-bar span:last-child::after {
+    content: "";
+}
+
+/* Executive Summary */
+.executive-summary {
+    padding: 24px 48px 0;
+}
+
+.executive-summary h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1b2a4a;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
+
+.summary-box {
+    border: 2px solid #1b2a4a;
+    border-left: 5px solid #d4a853;
+    padding: 14px 18px;
+    background: #faf8f3;
+}
+
+.summary-box p {
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: #2d3748;
+}
+
+/* Sections */
+.section {
+    padding: 18px 48px 0;
+}
+
+.section h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1b2a4a;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #d4a853;
+    margin-bottom: 14px;
+}
+
+/* Experience entries */
+.exp-entry {
+    margin-bottom: 18px;
+}
+
+.exp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.exp-header h3 {
+    font-size: 11.5pt;
+    font-weight: 700;
+    color: #1b2a4a;
+}
+
+.exp-header .company {
+    font-size: 10pt;
+    color: #d4a853;
+    font-weight: 600;
+    display: block;
+}
+
+.exp-header .duration {
+    font-size: 9.5pt;
+    color: #718096;
+    white-space: nowrap;
+}
+
+.achievements {
+    list-style: none;
+    padding: 0;
+    margin-left: 4px;
+}
+
+.achievements li {
+    font-size: 10pt;
+    color: #2d3748;
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+.achievements li::before {
+    content: "\25C6";
+    position: absolute;
+    left: 0;
+    color: #d4a853;
+    font-size: 8pt;
+    top: 2px;
+}
+
+/* Education */
+.edu-entry {
+    margin-bottom: 10px;
+}
+
+.edu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.edu-header strong {
+    font-size: 11pt;
+    color: #1b2a4a;
+}
+
+.edu-header .institution {
+    font-size: 10pt;
+    color: #4a5568;
+    font-style: italic;
+    display: block;
+}
+
+.edu-header .year {
+    font-size: 9.5pt;
+    color: #718096;
+}
+
+/* Two-column bottom */
+.two-col {
+    display: flex;
+    gap: 32px;
+    padding: 0 48px 32px;
+}
+
+.col {
+    flex: 1;
+    padding: 18px 0 0;
+}
+
+/* Competencies */
+.competencies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.competency {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 9pt;
+    font-weight: 600;
+    color: #1b2a4a;
+    background: #faf8f3;
+    border: 1px solid #d4a853;
+    border-radius: 3px;
+}
+
+.cert-list {
+    list-style: none;
+    padding: 0;
+}
+
+.cert-list li {
+    font-size: 10pt;
+    color: #2d3748;
+    padding: 4px 0 4px 18px;
+    position: relative;
+}
+
+.cert-list li::before {
+    content: "\25C6";
+    position: absolute;
+    left: 0;
+    color: #d4a853;
+    font-size: 8pt;
+    top: 6px;
+}

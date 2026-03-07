@@ -1,0 +1,237 @@
+/* Creative Resume Template — Color accent sidebar bar, timeline experience, purple/teal */
+
+@page {
+    size: letter;
+    margin: 0;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #2d3748;
+    background: #fff;
+}
+
+.resume {
+    position: relative;
+    padding: 40px 48px 40px 60px;
+    min-height: 100vh;
+}
+
+/* Left accent bar */
+.accent-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 100%;
+    background: linear-gradient(180deg, #6b46c1, #319795);
+}
+
+/* Header */
+.header {
+    margin-bottom: 28px;
+}
+
+.header h1 {
+    font-size: 28pt;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6b46c1, #319795);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 2px;
+}
+
+.header .title {
+    font-size: 13pt;
+    color: #6b46c1;
+    font-weight: 400;
+    margin-bottom: 10px;
+}
+
+.header .contact {
+    font-size: 9pt;
+    color: #718096;
+}
+
+.header .contact span::after {
+    content: "  /  ";
+    color: #cbd5e0;
+}
+
+.header .contact span:last-child::after {
+    content: "";
+}
+
+/* Section */
+.section {
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.section-icon {
+    display: inline-block;
+    font-size: 14pt;
+    color: #6b46c1;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.section h2 {
+    display: inline-block;
+    font-size: 13pt;
+    font-weight: 700;
+    color: #2d3748;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding-bottom: 6px;
+    border-bottom: 3px solid #319795;
+    margin-bottom: 14px;
+    vertical-align: middle;
+}
+
+.summary-text {
+    font-size: 10pt;
+    color: #4a5568;
+    line-height: 1.7;
+    padding-left: 4px;
+    border-left: 3px solid #e2e8f0;
+    margin-left: 2px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+/* Timeline */
+.timeline {
+    position: relative;
+    padding-left: 24px;
+}
+
+.timeline::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #6b46c1, #319795);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 18px;
+}
+
+.timeline-dot {
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #6b46c1;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 2px #6b46c1;
+}
+
+.timeline-header h3 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.timeline-header .company {
+    font-size: 10pt;
+    color: #319795;
+    font-weight: 500;
+}
+
+.timeline-header .duration {
+    font-size: 9pt;
+    color: #a0aec0;
+    margin-left: 8px;
+}
+
+.timeline-body .bullet {
+    font-size: 9.5pt;
+    color: #4a5568;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 3px;
+}
+
+.timeline-body .bullet::before {
+    content: "\25B8";
+    position: absolute;
+    left: 0;
+    color: #319795;
+}
+
+/* Education */
+.edu-entry {
+    margin-bottom: 10px;
+    padding-left: 4px;
+}
+
+.edu-entry h3 {
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.edu-entry .institution {
+    font-size: 9.5pt;
+    color: #6b46c1;
+}
+
+.edu-entry .year {
+    font-size: 9pt;
+    color: #a0aec0;
+    margin-left: 8px;
+}
+
+/* Skill tags */
+.skill-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 9pt;
+    font-weight: 500;
+    color: #6b46c1;
+    background: #f3e8ff;
+    border-radius: 16px;
+    border: 1px solid #d6bcfa;
+}
+
+.cert-list {
+    list-style: none;
+    padding: 0;
+}
+
+.cert-list li {
+    font-size: 10pt;
+    color: #4a5568;
+    padding: 3px 0 3px 16px;
+    position: relative;
+}
+
+.cert-list li::before {
+    content: "\2713";
+    position: absolute;
+    left: 0;
+    color: #319795;
+    font-weight: 700;
+}

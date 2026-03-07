@@ -1,0 +1,101 @@
+/* Minimal Resume Template — Maximum whitespace, no colors, ATS-optimized */
+
+@page {
+    size: letter;
+    margin: 0.75in 1in;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #000;
+    background: #fff;
+}
+
+.resume {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 32px 0;
+}
+
+/* Header */
+header {
+    margin-bottom: 24px;
+}
+
+header h1 {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 4px;
+}
+
+.contact {
+    font-size: 9.5pt;
+    color: #333;
+}
+
+/* Sections */
+section {
+    margin-bottom: 20px;
+}
+
+section h2 {
+    font-size: 11pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #000;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #000;
+    margin-bottom: 10px;
+}
+
+section > p {
+    font-size: 10pt;
+    color: #333;
+    line-height: 1.6;
+}
+
+/* Entries */
+.entry {
+    margin-bottom: 12px;
+}
+
+.entry-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.entry-line span:first-child {
+    font-size: 10.5pt;
+}
+
+.entry-line span:last-child {
+    font-size: 9.5pt;
+    color: #555;
+    white-space: nowrap;
+}
+
+/* Lists */
+ul {
+    list-style-type: disc;
+    margin-left: 18px;
+    margin-top: 2px;
+}
+
+li {
+    font-size: 10pt;
+    color: #333;
+    margin-bottom: 2px;
+    line-height: 1.5;
+}

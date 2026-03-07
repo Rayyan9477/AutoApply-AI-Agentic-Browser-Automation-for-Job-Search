@@ -1,0 +1,197 @@
+/* Modern Resume Template — Two-column CSS Grid with blue accent */
+
+@page {
+    size: letter;
+    margin: 0;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #333;
+    background: #fff;
+}
+
+.resume {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    background: #1a365d;
+    color: #e2e8f0;
+    padding: 36px 24px;
+}
+
+.sidebar h2 {
+    color: #90cdf4;
+    font-size: 11pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #2b6cb0;
+}
+
+.sidebar-section {
+    margin-bottom: 28px;
+}
+
+.contact-item {
+    font-size: 9pt;
+    margin-bottom: 6px;
+    word-break: break-all;
+}
+
+.sidebar .skills ul {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar .skills li {
+    font-size: 9pt;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .skills li:last-child {
+    border-bottom: none;
+}
+
+.edu-item {
+    margin-bottom: 14px;
+}
+
+.edu-degree {
+    font-weight: 600;
+    font-size: 9.5pt;
+    color: #fff;
+}
+
+.edu-institution {
+    font-size: 9pt;
+    color: #cbd5e0;
+}
+
+.edu-year {
+    font-size: 8.5pt;
+    color: #a0aec0;
+}
+
+.certifications ul {
+    list-style: none;
+    padding: 0;
+}
+
+.certifications li {
+    font-size: 9pt;
+    margin-bottom: 4px;
+}
+
+/* Main content */
+.main-content {
+    padding: 36px 32px;
+}
+
+.header h1 {
+    font-size: 24pt;
+    font-weight: 700;
+    color: #1a365d;
+    margin-bottom: 2px;
+}
+
+.header .title {
+    font-size: 12pt;
+    color: #2b6cb0;
+    font-weight: 400;
+    margin-bottom: 16px;
+}
+
+.section {
+    margin-bottom: 22px;
+}
+
+.section h2 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #1a365d;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #2b6cb0;
+    margin-bottom: 12px;
+}
+
+.summary p {
+    font-size: 10pt;
+    color: #4a5568;
+    line-height: 1.6;
+}
+
+.exp-item {
+    margin-bottom: 18px;
+}
+
+.exp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.exp-title {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.exp-company {
+    font-size: 10pt;
+    color: #2b6cb0;
+}
+
+.exp-duration {
+    font-size: 9pt;
+    color: #718096;
+    white-space: nowrap;
+}
+
+.exp-description .bullet {
+    font-size: 9.5pt;
+    color: #4a5568;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 3px;
+}
+
+.exp-description .bullet::before {
+    content: "\2022";
+    position: absolute;
+    left: 0;
+    color: #2b6cb0;
+}
+
+.project-item {
+    margin-bottom: 12px;
+}
+
+.project-item h3 {
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.project-item p {
+    font-size: 9.5pt;
+    color: #4a5568;
+}
