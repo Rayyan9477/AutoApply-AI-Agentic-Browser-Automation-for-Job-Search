@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import Grid from '@mui/material/Grid';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -27,18 +26,11 @@ interface TemplateSelectorProps {
   onSelect: (templateId: string) => void;
 }
 
-function TemplateSelector({ selectedId, onSelect }: TemplateSelectorProps) {
-  const [selected, setSelected] = useState(selectedId ?? 'modern');
-
-  const handleSelect = (id: string) => {
-    setSelected(id);
-    onSelect(id);
-  };
-
+function TemplateSelector({ selectedId = 'modern', onSelect }: TemplateSelectorProps) {
   return (
     <Grid container spacing={2}>
       {TEMPLATES.map((template) => {
-        const isSelected = selected === template.id;
+        const isSelected = selectedId === template.id;
         return (
           <Grid item xs={12} sm={6} md={4} lg={2.4} key={template.id}>
             <Card
@@ -48,7 +40,7 @@ function TemplateSelector({ selectedId, onSelect }: TemplateSelectorProps) {
                 position: 'relative',
               }}
             >
-              <CardActionArea onClick={() => handleSelect(template.id)}>
+              <CardActionArea onClick={() => onSelect(template.id)}>
                 <CardContent sx={{ textAlign: 'center', py: 3 }}>
                   {isSelected && (
                     <CheckCircleIcon

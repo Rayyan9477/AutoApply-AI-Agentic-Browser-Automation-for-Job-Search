@@ -51,8 +51,8 @@ function SettingsPage() {
     [handleUpdate],
   );
 
-  const handleATSThresholdChange = useCallback(
-    (_: Event, value: number | number[]) => {
+  const handleATSThresholdCommit = useCallback(
+    (_: React.SyntheticEvent | Event, value: number | number[]) => {
       if (typeof value === 'number') {
         handleUpdate('min_ats_score', value / 100);
       }
@@ -60,8 +60,8 @@ function SettingsPage() {
     [handleUpdate],
   );
 
-  const handleParallelChange = useCallback(
-    (_: Event, value: number | number[]) => {
+  const handleParallelCommit = useCallback(
+    (_: React.SyntheticEvent | Event, value: number | number[]) => {
       if (typeof value === 'number') {
         handleUpdate('max_parallel', value);
       }
@@ -136,7 +136,7 @@ function SettingsPage() {
                 <Box sx={{ px: 1 }}>
                   <Slider
                     value={Math.round((settings?.min_ats_score ?? 0.75) * 100)}
-                    onChange={handleATSThresholdChange}
+                    onChangeCommitted={handleATSThresholdCommit}
                     min={0}
                     max={100}
                     step={5}
@@ -167,7 +167,7 @@ function SettingsPage() {
                 <Box sx={{ px: 1 }}>
                   <Slider
                     value={settings?.max_parallel ?? 3}
-                    onChange={handleParallelChange}
+                    onChangeCommitted={handleParallelCommit}
                     min={1}
                     max={5}
                     step={1}

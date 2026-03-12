@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+# WeasyPrint system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libffi-dev libcairo2 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy application code first (needed for non-editable install)
+COPY backend/pyproject.toml backend/setup.cfg* ./
+COPY backend/app/ ./app/
+
+# Install Python dependencies (non-editable)
+RUN pip install --no-cache-dir ".[dev]"
+
+# Install Playwright Chromium (playwright is in deps, just install browser)
+RUN playwright install chromium --with-deps
+
+# Create data directories
+RUN mkdir -p data/db data/sessions data/vector_indices data/generated/resumes data/generated/cover_letters data/uploads
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

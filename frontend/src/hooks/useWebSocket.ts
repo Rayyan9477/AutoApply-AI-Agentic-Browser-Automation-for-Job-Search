@@ -59,8 +59,13 @@ export function useWebSocket(
   const connect = useCallback(() => {
     disconnect();
 
+    const envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = url.startsWith('ws') ? url : `${protocol}//${window.location.host}${url}`;
+    const wsUrl = envWsUrl
+      ? envWsUrl
+      : url.startsWith('ws')
+        ? url
+        : `${protocol}//${window.location.host}${url}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

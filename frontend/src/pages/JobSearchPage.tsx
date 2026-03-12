@@ -12,6 +12,7 @@ import JobDetail from '@/components/jobs/JobDetail';
 import LoadingState from '@/components/common/LoadingState';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import { useJobs, useSearchJobs } from '@/hooks/useJobs';
+import { useCreateApplication } from '@/hooks/useApplications';
 import { useJobStore } from '@/store/useJobStore';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -28,6 +29,20 @@ function JobSearchPage() {
 
   const { data: jobsData, isLoading, isError } = useJobs(page, 20);
   const searchMutation = useSearchJobs();
+  const createAppMutation = useCreateApplication();
+
+  const handleApply = useCallback(
+    (jobId: string) => {
+      createAppMutation.mutate(
+        { job_id: jobId },
+        {
+          onSuccess: () => showNotification('Application created successfully.', 'success'),
+          onError: () => showNotification('Failed to create application.', 'error'),
+        },
+      );
+    },
+    [createAppMutation, showNotification],
+  );
 
   const handleSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
@@ -98,9 +113,7 @@ function JobSearchPage() {
                   <JobCard
                     job={job}
                     onViewDetails={openDetail}
-                    onApply={(jobId) =>
-                      showNotification(`Creating application for job ${jobId.slice(0, 8)}...`, 'info')
-                    }
+                    onApply={handleApply}
                   />
                 </Grid>
               ))}
@@ -123,9 +136,7 @@ function JobSearchPage() {
           jobId={selectedJobId}
           open={detailOpen}
           onClose={closeDetail}
-          onApply={(jobId) =>
-            showNotification(`Creating application for job ${jobId.slice(0, 8)}...`, 'info')
-          }
+          onApply={handleApply}
         />
       </Box>
     </ErrorBoundary>
