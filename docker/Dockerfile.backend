@@ -15,6 +15,9 @@ COPY backend/app/ ./app/
 # Install Python dependencies (non-editable)
 RUN pip install --no-cache-dir ".[dev]"
 
+# Install spaCy English model (required for ATS scoring)
+RUN python -m spacy download en_core_web_sm
+
 # Install Playwright Chromium (playwright is in deps, just install browser)
 RUN playwright install chromium --with-deps
 

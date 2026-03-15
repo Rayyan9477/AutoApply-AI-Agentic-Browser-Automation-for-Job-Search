@@ -13,15 +13,14 @@ import Slider from '@mui/material/Slider';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
-import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
 
 import LoadingState from '@/components/common/LoadingState';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
+import LLMProvidersCard from '@/components/settings/LLMProvidersCard';
+import CandidateProfileEditor from '@/components/settings/CandidateProfileEditor';
 import { useSettings, useUpdateSettings, useLLMProviders } from '@/hooks/useSettings';
 import { useAppStore } from '@/store/useAppStore';
+import type { CandidateProfile } from '@/types/settings';
 
 const PLATFORMS = ['linkedin', 'indeed', 'glassdoor'];
 
@@ -78,6 +77,13 @@ function SettingsPage() {
       handleUpdate('platforms_enabled', updated);
     },
     [settings, handleUpdate],
+  );
+
+  const handleProfileSave = useCallback(
+    (profile: CandidateProfile) => {
+      handleUpdate('candidate_profile', profile);
+    },
+    [handleUpdate],
   );
 
   if (isLoading) {
@@ -214,73 +220,15 @@ function SettingsPage() {
 
           {/* LLM Providers */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  LLM Providers
-                </Typography>
+            <LLMProvidersCard providers={llmProviders} />
+          </Grid>
 
-                <Divider sx={{ mb: 2 }} />
-
-                <Grid container spacing={2}>
-                  {llmProviders?.map((provider) => (
-                    <Grid item xs={12} sm={4} key={provider.provider}>
-                      <Box
-                        sx={{
-                          p: 2,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          borderRadius: 1,
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            mb: 1,
-                          }}
-                        >
-                          <Typography variant="subtitle1" fontWeight={600}>
-                            {provider.provider.charAt(0).toUpperCase() + provider.provider.slice(1)}
-                          </Typography>
-                          {provider.configured ? (
-                            <CheckCircleIcon color="success" fontSize="small" />
-                          ) : (
-                            <CancelIcon color="disabled" fontSize="small" />
-                          )}
-                        </Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Model: {provider.model}
-                        </Typography>
-                        <Box sx={{ mt: 1 }}>
-                          <Chip
-                            label={provider.configured ? 'Configured' : 'Not Configured'}
-                            size="small"
-                            color={provider.configured ? 'success' : 'default'}
-                            variant="outlined"
-                          />
-                          {provider.is_primary && (
-                            <Chip
-                              label="Primary"
-                              size="small"
-                              color="primary"
-                              sx={{ ml: 0.5 }}
-                            />
-                          )}
-                        </Box>
-                      </Box>
-                    </Grid>
-                  )) ?? (
-                    <Grid item xs={12}>
-                      <Typography variant="body2" color="text.secondary">
-                        Loading provider information...
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              </CardContent>
-            </Card>
+          {/* Candidate Profile */}
+          <Grid item xs={12}>
+            <CandidateProfileEditor
+              profile={settings?.candidate_profile ?? null}
+              onSave={handleProfileSave}
+            />
           </Grid>
         </Grid>
       </Box>

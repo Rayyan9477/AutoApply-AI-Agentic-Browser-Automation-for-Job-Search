@@ -48,5 +48,6 @@ export async function optimizeResume(resumeId: string): Promise<Resume> {
 
 /** Get the download URL for a resume file. */
 export function getDownloadUrl(resumeId: string, format: 'pdf' | 'docx' = 'pdf'): string {
-  return `/api/v1/resumes/${resumeId}/download?format=${format}`;
+  const baseURL = api.defaults.baseURL ?? '/api/v1';
+  return `${baseURL}/resumes/${resumeId}/download?format=${format}`;
 }

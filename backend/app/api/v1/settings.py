@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.config.settings import get_settings as get_app_settings
 from app.models.user_settings import UserSettings
 from app.schemas.settings import LLMProviderStatus, SettingsResponse, SettingsUpdate
 
@@ -70,12 +71,24 @@ async def update_settings(
     summary="List LLM provider statuses",
 )
 async def list_llm_providers() -> list[LLMProviderStatus]:
-    """List configured LLM providers and their status.
+    """List configured LLM providers and their real configuration status."""
+    settings = get_app_settings()
+    llm = settings.llm
 
-    Placeholder: returns unconfigured providers until Phase 5.
-    """
+    providers_config = [
+        ("openai", llm.openai_api_key, "gpt-4o"),
+        ("groq", llm.groq_api_key, "llama-3.1-70b-versatile"),
+        ("gemini", llm.gemini_api_key, "gemini-pro"),
+        ("openrouter", llm.openrouter_api_key, llm.default_model),
+        ("github", llm.github_token, "gpt-4o"),
+    ]
+
     return [
-        LLMProviderStatus(provider="openai", configured=False, model="gpt-4o"),
-        LLMProviderStatus(provider="anthropic", configured=False, model="claude-3-opus"),
-        LLMProviderStatus(provider="gemini", configured=False, model="gemini-pro"),
+        LLMProviderStatus(
+            provider=name,
+            configured=bool(key.get_secret_value()),
+            model=model,
+            is_primary=llm.preferred_provider == name,
+        )
+        for name, key, model in providers_config
     ]

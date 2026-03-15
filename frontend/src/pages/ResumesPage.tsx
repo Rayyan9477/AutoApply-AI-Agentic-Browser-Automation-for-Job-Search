@@ -99,7 +99,7 @@ function ResumesPage() {
                   </CardContent>
 
                   <CardActions sx={{ px: 2, pb: 2 }}>
-                    {resume.file_path_pdf && (
+                    {resume.has_pdf && (
                       <Button
                         size="small"
                         startIcon={<DownloadIcon />}
@@ -108,7 +108,7 @@ function ResumesPage() {
                         PDF
                       </Button>
                     )}
-                    {resume.file_path_docx && (
+                    {resume.has_docx && (
                       <Button
                         size="small"
                         startIcon={<DownloadIcon />}

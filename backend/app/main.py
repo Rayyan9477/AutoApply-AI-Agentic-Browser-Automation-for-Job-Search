@@ -68,9 +68,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Prometheus metrics endpoint
-    metrics_app = make_asgi_app()
-    app.mount("/metrics", metrics_app)
+    # Prometheus metrics endpoint (disabled in production to avoid data leak)
+    if settings.environment != Environment.PRODUCTION:
+        metrics_app = make_asgi_app()
+        app.mount("/metrics", metrics_app)
 
     # Exception handlers
     @app.exception_handler(AutoApplyError)
