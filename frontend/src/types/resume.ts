@@ -9,8 +9,8 @@ export interface Resume {
   template_id: string;
   base_resume_id: string | null;
   job_id: string | null;
-  file_path_pdf: string | null;
-  file_path_docx: string | null;
+  has_pdf: boolean;
+  has_docx: boolean;
   ats_score: number | null;
   created_at: string;
   updated_at: string;

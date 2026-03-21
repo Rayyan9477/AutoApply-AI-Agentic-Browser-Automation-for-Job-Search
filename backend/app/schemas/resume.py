@@ -1,8 +1,9 @@
 """Pydantic schemas for resume-related API requests and responses."""
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ResumeUploadResponse(BaseModel):
@@ -44,6 +45,12 @@ class ResumeScoreResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
 
 
+class ResumeOptimizeRequest(BaseModel):
+    """Request to optimize a resume for ATS compatibility."""
+
+    job_id: str | None = None
+
+
 class ResumeResponse(BaseModel):
     """Single resume in API responses."""
 
@@ -55,11 +62,30 @@ class ResumeResponse(BaseModel):
     template_id: str
     base_resume_id: str | None = None
     job_id: str | None = None
-    file_path_pdf: str | None = None
-    file_path_docx: str | None = None
+    has_pdf: bool = False
+    has_docx: bool = False
     ats_score: float | None = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _convert_paths_to_flags(cls, data: Any) -> Any:
+        """Convert internal file paths to boolean flags to avoid leaking server paths."""
+        if hasattr(data, "__dict__"):
+            # ORM model — check attributes
+            return {
+                **{k: v for k, v in data.__dict__.items() if not k.startswith("_")},
+                "has_pdf": bool(getattr(data, "file_path_pdf", None)),
+                "has_docx": bool(getattr(data, "file_path_docx", None)),
+            }
+        if isinstance(data, dict):
+            return {
+                **data,
+                "has_pdf": bool(data.get("file_path_pdf")),
+                "has_docx": bool(data.get("file_path_docx")),
+            }
+        return data
 
 
 class ResumeListResponse(BaseModel):

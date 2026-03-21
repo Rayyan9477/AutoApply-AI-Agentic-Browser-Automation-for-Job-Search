@@ -15,10 +15,10 @@ from sqlalchemy import select
 from app.api.websocket.events import manager as ws_manager
 from app.config.constants import QUEUE_APPLY, ApplicationStatus
 from app.config.settings import get_settings
+from app.core.automation.platforms import platform_registry
 from app.core.automation.platforms.base import JobListing
-from app.core.automation.platforms.registry import platform_registry
 from app.core.exceptions import AutoApplyError
-from app.db.redis import get_redis
+from app.db.redis import get_redis, init_redis_pool
 from app.db.session import async_session_factory
 from app.models.application import Application
 from app.models.job import Job
@@ -433,6 +433,8 @@ async def run_worker() -> None:
     Blocks indefinitely, polling the Redis queue for application tasks.
     Falls back gracefully if Redis is unavailable.
     """
+    settings = get_settings()
+    await init_redis_pool(settings.redis_url)
     redis = get_redis()
     if not redis:
         logger.error("worker.redis_unavailable")

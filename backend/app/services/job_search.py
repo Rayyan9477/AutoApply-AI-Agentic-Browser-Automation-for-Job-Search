@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.config.settings import get_settings
+from app.core.automation.platforms import platform_registry
 from app.core.automation.platforms.base import JobListing
-from app.core.automation.platforms.registry import platform_registry
 from app.core.exceptions import RecordNotFoundError
 from app.core.job_discovery.exa_search import ExaJobSearch
 from app.models.job import Job

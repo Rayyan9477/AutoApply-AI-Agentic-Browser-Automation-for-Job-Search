@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError as SAIntegrityError
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from app.core.db_resilience import handle_db_errors, with_retry
-from app.core.exceptions import ConnectionError, IntegrityError, QueryError
+from app.core.exceptions import DatabaseConnectionError, IntegrityError, QueryError
 
 # ---------------------------------------------------------------------------
 # handle_db_errors
@@ -28,7 +28,7 @@ class TestHandleDbErrors:
         async def failing_op() -> None:
             raise OperationalError("connection lost", {}, None)
 
-        with pytest.raises(ConnectionError):
+        with pytest.raises(DatabaseConnectionError):
             await failing_op()
 
     async def test_maps_generic_sqlalchemy_error(self) -> None:

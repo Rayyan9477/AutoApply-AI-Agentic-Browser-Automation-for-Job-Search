@@ -4,6 +4,7 @@ Handles upload, listing, generation, and scoring of resumes.
 Uses DocumentParser for real file parsing and SkillMatcher for skill extraction.
 """
 
+import re
 import uuid
 from pathlib import Path
 
@@ -12,8 +13,10 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.documents.generator import DocumentGenerator
 from app.core.documents.parser import DocumentParser, ParsedResume
 from app.core.exceptions import ParseError, RecordNotFoundError
+from app.core.llm.client import LLMClient
 from app.models.job import Job
 from app.models.resume import Resume
 from app.schemas.resume import (
@@ -188,29 +191,176 @@ async def _get_job(db: AsyncSession, job_id: str) -> Job:
     return job
 
 
+def _build_resume_data_from_text(content_text: str) -> dict:
+    """Convert raw resume text into structured data for templates.
+
+    Extracts contact info, sections, and skills from plain text using
+    the same regex patterns as DocumentParser.
+    """
+    from app.core.documents.parser import (
+        _EMAIL_RE,
+        _GITHUB_RE,
+        _LINKEDIN_RE,
+        _PHONE_RE,
+        _SECTION_HEADERS,
+    )
+
+    lines = content_text.split("\n")
+    name = lines[0].strip() if lines else ""
+
+    # Extract contact info
+    email_m = _EMAIL_RE.search(content_text)
+    phone_m = _PHONE_RE.search(content_text)
+    linkedin_m = _LINKEDIN_RE.search(content_text)
+    github_m = _GITHUB_RE.search(content_text)
+
+    # Extract sections by header
+    sections: dict[str, str] = {}
+    current_section = ""
+    current_content: list[str] = []
+    lower_headers = {h.lower() for h in _SECTION_HEADERS}
+
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped.lower().rstrip(":") in lower_headers:
+            if current_section:
+                sections[current_section] = "\n".join(current_content).strip()
+            current_section = stripped.lower().rstrip(":")
+            current_content = []
+        elif current_section:
+            current_content.append(stripped)
+
+    if current_section:
+        sections[current_section] = "\n".join(current_content).strip()
+
+    # Build skills list
+    skills_text = sections.get("skills", "") or sections.get("technical skills", "")
+    skills = [s.strip() for s in re.split(r"[,\n•·|]", skills_text) if s.strip()]
+
+    # Build experience entries
+    exp_text = (
+        sections.get("experience", "")
+        or sections.get("work experience", "")
+        or sections.get("professional experience", "")
+    )
+    experience = _parse_experience_section(exp_text) if exp_text else []
+
+    # Build education entries
+    edu_text = sections.get("education", "") or sections.get("academic background", "")
+    education = _parse_education_section(edu_text) if edu_text else []
+
+    # Certifications
+    cert_text = sections.get("certifications", "") or sections.get("certificates", "")
+    certifications = [c.strip() for c in cert_text.split("\n") if c.strip()] if cert_text else []
+
+    summary = (
+        sections.get("summary", "")
+        or sections.get("professional summary", "")
+        or sections.get("objective", "")
+        or sections.get("profile", "")
+    )
+
+    return {
+        "name": name,
+        "email": email_m.group() if email_m else "",
+        "phone": phone_m.group() if phone_m else "",
+        "location": "",
+        "linkedin": linkedin_m.group() if linkedin_m else "",
+        "github": github_m.group() if github_m else "",
+        "title": "",
+        "summary": summary,
+        "skills": skills,
+        "experience": experience,
+        "education": education,
+        "certifications": certifications,
+        "projects": [],
+    }
+
+
+def _parse_experience_section(text: str) -> list[dict]:
+    """Parse experience section text into structured entries."""
+    entries: list[dict] = []
+    current: dict | None = None
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Heuristic: lines that look like titles (short, no bullet)
+        if not stripped.startswith(("•", "-", "*", "·")) and len(stripped) < 80:
+            if current:
+                entries.append(current)
+            current = {
+                "title": stripped,
+                "company": "",
+                "duration": "",
+                "description": "",
+            }
+        elif current:
+            current["description"] += stripped.lstrip("•-*· ") + "\n"
+
+    if current:
+        entries.append(current)
+    return entries
+
+
+def _parse_education_section(text: str) -> list[dict]:
+    """Parse education section text into structured entries."""
+    entries: list[dict] = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("•", "-", "*")):
+            continue
+        entries.append({
+            "degree": stripped,
+            "institution": "",
+            "year": "",
+        })
+    return entries
+
+
 async def generate_tailored_resume(
     db: AsyncSession,
     request: ResumeGenerateRequest,
 ) -> ResumeResponse:
-    """Generate a tailored resume for a specific job.
+    """Generate a tailored resume for a specific job using LLM.
 
-    Placeholder: returns a stub record. Real LLM generation in Phase 5.
+    Loads the base resume and target job, tailors the content via LLM,
+    renders to PDF/DOCX, and stores the result.
 
     Args:
         db: Async database session.
-        request: Generation parameters.
+        request: Generation parameters (base_resume_id, job_id, template, formats).
 
     Returns:
-        The generated resume response.
+        The generated tailored resume response.
     """
     base = await get_resume(db, request.base_resume_id)
+    job = await _get_job(db, request.job_id)
 
+    # Build structured data from base resume text
+    resume_data = _build_resume_data_from_text(base.content_text or "")
+
+    # Generate via DocumentGenerator (LLM tailoring + rendering)
+    llm = LLMClient()
+    generator = DocumentGenerator(llm_client=llm)
+    doc = await generator.generate_resume(
+        resume_data=resume_data,
+        job_description=job.description or "",
+        template_name=request.template_id,
+        formats=request.output_formats,
+    )
+
+    # Create the tailored resume record
     tailored = Resume(
         name=f"Tailored - {base.name}",
         type="tailored",
         template_id=request.template_id,
         base_resume_id=request.base_resume_id,
         job_id=request.job_id,
+        file_path_pdf=doc.pdf_path,
+        file_path_docx=doc.docx_path,
+        content_text=base.content_text,
     )
     db.add(tailored)
     await db.commit()
@@ -221,6 +371,8 @@ async def generate_tailored_resume(
         resume_id=tailored.id,
         base_id=request.base_resume_id,
         job_id=request.job_id,
+        has_pdf=doc.pdf_path is not None,
+        has_docx=doc.docx_path is not None,
     )
     return ResumeResponse.model_validate(tailored)
 
@@ -384,3 +536,131 @@ def _score_with_text_fallback(
         missing_skills=missing,
         suggestions=suggestions,
     )
+
+
+async def optimize_resume(
+    db: AsyncSession,
+    resume_id: str,
+    job_id: str | None = None,
+) -> ResumeResponse:
+    """Optimize a resume for ATS compatibility using LLM rewriting.
+
+    Scores the resume, gets improvement suggestions, then uses the LLM
+    to rewrite the content for maximum ATS pass-through. Creates a new
+    optimized resume record linked to the original.
+
+    Args:
+        db: Async database session.
+        resume_id: ID of the resume to optimize.
+        job_id: Target job ID. Falls back to resume.job_id if absent.
+
+    Returns:
+        The newly created optimized resume.
+    """
+    resume = await get_resume(db, resume_id)
+    target_job_id = job_id or resume.job_id
+    if not target_job_id:
+        raise RecordNotFoundError("Job", "none (no job_id provided)")
+
+    job = await _get_job(db, target_job_id)
+    resume_text = resume.content_text or ""
+    job_description = job.description or ""
+
+    # Score the resume to get detailed breakdown
+    score_result = await score_resume(
+        db, resume_id, ResumeScoreRequest(job_id=target_job_id),
+    )
+
+    # Get optimizer suggestions
+    score_breakdown = {
+        "overall_score": score_result.overall_score,
+        "skill_score": score_result.skill_score,
+        "experience_score": score_result.experience_score,
+        "education_score": score_result.education_score,
+        "keyword_score": score_result.keyword_score,
+        "missing_skills": score_result.missing_skills,
+    }
+
+    try:
+        from app.core.ats.optimizer import ATSOptimizer
+        from app.core.ats.skill_matcher import SkillMatcher
+        optimizer = ATSOptimizer(skill_matcher=SkillMatcher())
+        from app.core.ats.scorer import ScoreDetails
+        # Build a minimal ScoreDetails for the optimizer
+        details = ScoreDetails(
+            overall_score=score_result.overall_score,
+            skill_score=score_result.skill_score,
+            experience_score=score_result.experience_score,
+            education_score=score_result.education_score,
+            keyword_score=score_result.keyword_score,
+            missing_required_skills=score_result.missing_skills,
+            improvement_suggestions=score_result.suggestions,
+        )
+        suggestions = optimizer.suggest_improvements(
+            details, resume_text, job_description,
+        )
+    except Exception:
+        logger.warning("ats_optimizer_unavailable", exc_info=True)
+        suggestions = score_result.suggestions
+
+    # Use LLM to rewrite the resume
+    from app.core.llm.prompts.ats_optimize import (
+        ATS_OPTIMIZE_SYSTEM_PROMPT,
+        render_ats_optimize_prompt,
+    )
+    from app.core.llm.prompts.resume_tailor import TailoredResumeData
+
+    llm = LLMClient()
+    prompt = render_ats_optimize_prompt(
+        resume_text, job_description, score_breakdown, suggestions,
+    )
+    optimized_data = await llm.complete_with_structured_output(
+        prompt=prompt,
+        output_schema=TailoredResumeData,
+        system_prompt=ATS_OPTIMIZE_SYSTEM_PROMPT,
+        purpose="ats_optimize",
+    )
+
+    # Render optimized resume to PDF/DOCX
+    generator = DocumentGenerator(llm_client=None)
+    doc = await generator.generate_resume(
+        resume_data=optimized_data.model_dump(),
+        job_description="",
+        template_name=resume.template_id,
+        formats=["pdf", "docx"],
+    )
+
+    # Create new optimized resume record
+    optimized = Resume(
+        name=f"Optimized - {resume.name}",
+        type="optimized",
+        template_id=resume.template_id,
+        base_resume_id=resume_id,
+        job_id=target_job_id,
+        file_path_pdf=doc.pdf_path,
+        file_path_docx=doc.docx_path,
+        content_text=resume_text,
+    )
+    db.add(optimized)
+    await db.commit()
+    await db.refresh(optimized)
+
+    # Re-score the optimized resume
+    try:
+        new_score = await score_resume(
+            db, optimized.id, ResumeScoreRequest(job_id=target_job_id),
+        )
+        optimized.ats_score = new_score.overall_score
+        await db.commit()
+        await db.refresh(optimized)
+    except Exception:
+        logger.warning("ats_rescore_failed", exc_info=True)
+
+    logger.info(
+        "resume_optimized",
+        original_id=resume_id,
+        optimized_id=optimized.id,
+        original_score=score_result.overall_score,
+        new_score=optimized.ats_score,
+    )
+    return ResumeResponse.model_validate(optimized)

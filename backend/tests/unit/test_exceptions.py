@@ -8,7 +8,7 @@ from app.core.exceptions import (
     AuthenticationError,
     AutoApplyError,
     BrowserError,
-    ConnectionError,
+    DatabaseConnectionError,
     DatabaseError,
     DocumentError,
     FormFillError,
@@ -57,7 +57,7 @@ class TestDatabaseErrors:
         assert "Database error" in e.message
 
     def test_connection_error(self):
-        e = ConnectionError()
+        e = DatabaseConnectionError()
         assert e.code == "DATABASE_CONNECTION_ERROR"
 
     def test_query_error(self):
