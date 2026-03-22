@@ -12,11 +12,13 @@ from app.core.exceptions import RecordNotFoundError
 from app.schemas.resume import (
     ResumeGenerateRequest,
     ResumeListResponse,
+    ResumeOptimizeRequest,
     ResumeResponse,
     ResumeScoreRequest,
     ResumeScoreResponse,
     ResumeUploadResponse,
 )
+from app.schemas.settings import CandidateProfileSchema
 from app.services import resume as resume_service
 
 logger = structlog.get_logger(__name__)
@@ -118,15 +120,15 @@ async def score_resume(
 )
 async def optimize_resume(
     resume_id: str,
+    request: ResumeOptimizeRequest = ResumeOptimizeRequest(),
     db: AsyncSession = Depends(get_db),
 ) -> ResumeResponse:
-    """Optimize a resume for ATS keyword matching.
+    """Optimize a resume for ATS keyword matching using LLM rewriting.
 
-    Placeholder: returns the existing resume unmodified until Phase 5.
+    Creates a new optimized resume linked to the original with improved
+    ATS compatibility scores.
     """
-    resume = await resume_service.get_resume(db, resume_id)
-    logger.info("resume_optimize_requested", resume_id=resume_id)
-    return ResumeResponse.model_validate(resume)
+    return await resume_service.optimize_resume(db, resume_id, request.job_id)
 
 
 @router.get(
@@ -153,4 +155,82 @@ async def download_resume(
         path=file_path,
         media_type=media_type,
         filename=f"{resume.name}.{format}",
+    )
+
+
+@router.get(
+    "/{resume_id}/profile-data",
+    response_model=CandidateProfileSchema,
+    summary="Extract profile data from a resume",
+)
+async def extract_profile_from_resume(
+    resume_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> CandidateProfileSchema:
+    """Extract structured candidate profile data from a resume.
+
+    Parses the resume's stored text content using DocumentParser's
+    section extraction and contact info regex to build a structured
+    CandidateProfile that can pre-fill the profile editor.
+    """
+    resume = await resume_service.get_resume(db, resume_id)
+    content = resume.content_text or ""
+
+    if not content.strip():
+        logger.warning("profile_extract_empty_resume", resume_id=resume_id)
+        return CandidateProfileSchema()
+
+    from app.core.documents.parser import DocumentParser
+
+    parser = DocumentParser()
+    contact = parser._extract_contact_info(content)
+    sections = parser._extract_sections(content)
+    skills = parser._extract_skills_from_text(content, sections)
+
+    # Derive the full name from the first non-empty line before any section
+    full_name = ""
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if (
+            stripped
+            and stripped.lower().rstrip(":") not in sections
+            and "@" not in stripped
+            and "http" not in stripped.lower()
+        ):
+            full_name = stripped
+            break
+
+    summary = ""
+    for key in ("summary", "objective", "professional summary", "profile"):
+        if key in sections:
+            summary = sections[key]
+            break
+
+    certifications: list[str] = []
+    for key in ("certifications", "certificates", "licenses"):
+        if key in sections:
+            cert_text = sections[key]
+            certifications = [
+                line.lstrip("-*\u2022\u2023 ").strip()
+                for line in cert_text.split("\n")
+                if line.strip()
+            ]
+            break
+
+    logger.info(
+        "profile_data_extracted",
+        resume_id=resume_id,
+        skills_count=len(skills),
+        has_contact=bool(contact),
+    )
+
+    return CandidateProfileSchema(
+        full_name=full_name,
+        email=contact.get("email", ""),
+        phone=contact.get("phone", ""),
+        linkedin_url=contact.get("linkedin", ""),
+        github_url=contact.get("github", ""),
+        summary=summary,
+        skills=skills,
+        certifications=certifications,
     )

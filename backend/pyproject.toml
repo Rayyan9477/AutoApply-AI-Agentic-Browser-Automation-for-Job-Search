@@ -1,0 +1,133 @@
+[project]
+name = "autoapply-backend"
+version = "2.0.0"
+description = "AutoApply AI — Smart Job Application Assistant Backend"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "websockets>=12.0",
+
+    # Configuration
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "python-dotenv>=1.0.0",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0.30",
+    "aiosqlite>=0.20.0",
+    "alembic>=1.13.0",
+
+    # Redis
+    "redis[hiredis]>=5.0.0",
+
+    # Browser automation
+    "browser-use>=0.1.40",
+    "playwright>=1.44.0",
+    "langchain-openai>=0.1.0",
+    "langchain-anthropic>=0.1.0",
+    "langchain-google-genai>=1.0.0",
+
+    # LLM abstraction layer
+    "litellm>=1.40.0",
+    "portkey-ai>=1.6.0",
+
+    # Document generation
+    "weasyprint>=62.0",
+    "python-docx>=1.1.0",
+    "jinja2>=3.1.0",
+    "PyPDF2>=3.0.0",
+
+    # ML / NLP
+    "sentence-transformers>=2.7.0",
+    "faiss-cpu>=1.8.0",
+    "spacy>=3.7.0",
+    "scikit-learn>=1.5.0",
+    "numpy>=1.26.0",
+    "fuzzywuzzy>=0.18.0",
+    "python-Levenshtein>=0.25.0",
+    "python-dateutil>=2.9.0",
+
+    # Async I/O
+    "httpx>=0.27.0",
+    "aiofiles>=24.1.0",
+
+    # Observability
+    "structlog>=24.1.0",
+    "prometheus-client>=0.20.0",
+
+    # Resilience
+    "tenacity>=8.3.0",
+
+    # Job discovery
+    "exa-py>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.27.0",
+    "fakeredis[aioredis]>=2.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+postgres = [
+    "asyncpg>=0.29.0",
+    "psycopg2-binary>=2.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--strict-markers -v"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "ANN",  # flake8-annotations
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "ANN401",  # dynamically typed expressions (typing.Any)
+    "B008",    # Depends() in function defaults — standard FastAPI pattern
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "SIM117", "E501"]  # relaxed rules for test files
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
