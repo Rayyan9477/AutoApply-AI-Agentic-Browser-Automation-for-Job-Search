@@ -40,12 +40,3 @@ export interface TimelineEntry {
   applications_applied: number;
   jobs_found: number;
 }
-
-/** Full analytics response combining all analytics data. */
-export interface AnalyticsResponse {
-  stats: DashboardStats;
-  funnel: ApplicationFunnelData[];
-  ats_distribution: ATSScoreDistribution[];
-  llm_usage: LLMUsageStats[];
-  timeline: TimelineEntry[];
-}
