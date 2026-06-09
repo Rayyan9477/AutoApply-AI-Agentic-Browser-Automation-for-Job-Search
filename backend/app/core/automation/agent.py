@@ -135,7 +135,13 @@ class BrowserAgent:
         deepseek_key = llm_config.deepseek_api_key.get_secret_value()
         groq_key = llm_config.groq_api_key.get_secret_value()
 
-        # Try preferred provider in order
+        # Try preferred provider first
+        if preferred == "openai" and openai_key:
+            return self._build_chat_openai(
+                model=llm_config.default_model,
+                api_key=openai_key,
+            )
+
         if preferred == "deepseek" and deepseek_key:
             return self._build_chat_openai(
                 model=llm_config.default_model if "deepseek" in llm_config.default_model.lower() else "deepseek-chat",
@@ -143,13 +149,26 @@ class BrowserAgent:
                 base_url="https://api.deepseek.com/v1",
             )
 
-        if preferred != "deepseek" and openai_key:
+        if preferred == "groq" and groq_key:
+            try:
+                from langchain_groq import ChatGroq
+            except ImportError as exc:
+                raise BrowserError(
+                    "langchain-groq not installed. Install with: pip install langchain-groq"
+                ) from exc
+            return ChatGroq(
+                model="llama-3.1-70b-versatile",
+                api_key=groq_key,
+                temperature=llm_config.temperature,
+            )
+
+        # Fallback chain when preferred provider is not available
+        if openai_key:
             return self._build_chat_openai(
                 model=llm_config.default_model,
                 api_key=openai_key,
             )
 
-        # Fallback: DeepSeek via OpenAI-compatible
         if deepseek_key:
             return self._build_chat_openai(
                 model="deepseek-chat",
@@ -157,7 +176,6 @@ class BrowserAgent:
                 base_url="https://api.deepseek.com/v1",
             )
 
-        # Fallback: Groq
         if groq_key:
             try:
                 from langchain_groq import ChatGroq
@@ -172,8 +190,8 @@ class BrowserAgent:
             )
 
         raise BrowserError(
-            "No LLM provider configured. Set at least OPENAI_API_KEY, "
-            "DEEPSEEK_API_KEY, or GROQ_API_KEY in your .env file."
+            "No LLM provider configured. Set at least LLM__OPENAI_API_KEY, "
+            "LLM__DEEPSEEK_API_KEY, or LLM__GROQ_API_KEY in your .env file."
         )
 
     def _build_chat_openai(
