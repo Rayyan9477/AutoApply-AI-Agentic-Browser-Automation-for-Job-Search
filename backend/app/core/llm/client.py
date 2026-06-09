@@ -68,6 +68,7 @@ class LLMClient:
             "groq_api_key": self._llm.groq_api_key.get_secret_value(),
             "gemini_api_key": self._llm.gemini_api_key.get_secret_value(),
             "openrouter_api_key": self._llm.openrouter_api_key.get_secret_value(),
+            "deepseek_api_key": self._llm.deepseek_api_key.get_secret_value(),
         }
         for attr, value in key_map.items():
             if value:
