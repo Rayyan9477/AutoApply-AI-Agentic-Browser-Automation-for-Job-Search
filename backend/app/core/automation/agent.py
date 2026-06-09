@@ -144,7 +144,7 @@ class BrowserAgent:
 
         if preferred == "deepseek" and deepseek_key:
             return self._build_chat_openai(
-                model=llm_config.default_model if "deepseek" in llm_config.default_model.lower() else "deepseek-chat",
+                model="deepseek-chat",
                 api_key=deepseek_key,
                 base_url="https://api.deepseek.com/v1",
             )
