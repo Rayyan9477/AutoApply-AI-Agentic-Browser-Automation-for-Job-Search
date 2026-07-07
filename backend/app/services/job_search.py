@@ -4,6 +4,7 @@ Handles job CRUD operations, search orchestration across platform
 scrapers, and ATS-based job analysis.
 """
 
+import hashlib
 from typing import Any
 
 import structlog
@@ -27,6 +28,23 @@ from app.schemas.job import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def _job_identity(job: Job) -> str:
+    """Stable, non-empty ``platform_job_id`` for a scraped listing.
+
+    Browser-scraped listings often arrive with a blank id (the agent returned no ``id`` field);
+    without a stable value distinct listings collide on the ``(user, platform, platform_job_id)``
+    unique constraint AND collapse during dedup. Derive one from the URL (hashed, so it fits the
+    column and is stable) when the id is blank.
+    """
+    pid = (job.platform_job_id or "").strip()
+    if pid:
+        return pid
+    url = (job.url or "").strip()
+    if url:
+        return "url:" + hashlib.sha1(url.encode()).hexdigest()[:16]
+    return ""
 
 
 async def search_jobs(
@@ -70,6 +88,38 @@ async def search_jobs(
 
     all_jobs: list[Job] = []
 
+    # Pre-fetch the user's existing jobs keyed by (platform, id) so dedup happens in memory. The
+    # previous per-listing SELECT ran under autoflush, so distinct listings sharing an empty/dup
+    # platform_job_id collapsed onto one row (silent data loss) — this also removes that N+1.
+    existing_by_key: dict[tuple[str, str], Job] = {
+        (j.platform, j.platform_job_id): j
+        for j in (
+            await db.execute(select(Job).where(Job.user_id == user_id))
+        ).scalars().all()
+    }
+    seen: set[tuple[str, str]] = set()
+
+    def _register(job: Job) -> None:
+        """Add a new job or fold it onto an already-known one; never append a duplicate."""
+        ident = _job_identity(job)
+        if not ident:  # no id and no url — can't key it; keep as-is (degenerate data)
+            db.add(job)
+            all_jobs.append(job)
+            return
+        # Persist the derived id so distinct blank-id listings don't collide on the unique index.
+        job.platform_job_id = ident
+        key = (job.platform, ident)
+        if key in seen:
+            return
+        seen.add(key)
+        existing = existing_by_key.get(key)
+        if existing is not None:
+            all_jobs.append(existing)
+        else:
+            db.add(job)
+            existing_by_key[key] = job
+            all_jobs.append(job)
+
     for platform_name in platforms_to_search:
         if not platform_registry.has(platform_name):
             logger.warning(
@@ -102,22 +152,7 @@ async def search_jobs(
 
         for listing in listings:
             try:
-                job = _listing_to_job(listing, user_id)
-                # Check for duplicates before inserting
-                existing = await db.execute(
-                    select(Job).where(
-                        Job.user_id == user_id,
-                        Job.platform == job.platform,
-                        Job.platform_job_id == job.platform_job_id,
-                    ),
-                )
-                existing_job = existing.scalar_one_or_none()
-                if existing_job is not None:
-                    all_jobs.append(existing_job)
-                    continue
-
-                db.add(job)
-                all_jobs.append(job)
+                _register(_listing_to_job(listing, user_id))
             except Exception as exc:
                 logger.warning(
                     "job_search.listing_conversion_failed",
@@ -142,17 +177,7 @@ async def search_jobs(
             )
             for listing in exa_listings:
                 try:
-                    job = _listing_to_job(listing, user_id)
-                    existing = await db.execute(
-                        select(Job).where(
-                            Job.user_id == user_id,
-                            Job.platform == job.platform,
-                            Job.platform_job_id == job.platform_job_id,
-                        ),
-                    )
-                    if existing.scalar_one_or_none() is None:
-                        db.add(job)
-                        all_jobs.append(job)
+                    _register(_listing_to_job(listing, user_id))
                 except Exception:
                     continue
             logger.info("job_search.exa_results", count=len(exa_listings))

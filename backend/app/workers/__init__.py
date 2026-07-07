@@ -1,5 +1,8 @@
-"""Background workers for async task processing."""
+"""Background workers for async task processing (Arq).
 
-from app.workers.application_worker import process_application, run_worker
+Run with: ``arq app.workers.tasks.WorkerSettings``.
+"""
 
-__all__ = ["process_application", "run_worker"]
+from app.workers.tasks import WorkerSettings, apply_to_job, review_application_run
+
+__all__ = ["WorkerSettings", "apply_to_job", "review_application_run"]

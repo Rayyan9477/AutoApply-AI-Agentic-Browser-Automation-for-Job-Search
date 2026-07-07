@@ -4,6 +4,8 @@ Handles upload, listing, generation, and scoring of resumes.
 Uses DocumentParser for real file parsing and SkillMatcher for skill extraction.
 """
 
+import asyncio
+import contextlib
 import re
 import uuid
 from pathlib import Path
@@ -16,7 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.documents.generator import DocumentGenerator
 from app.core.documents.parser import DocumentParser, ParsedResume
 from app.core.exceptions import ParseError, RecordNotFoundError
-from app.core.llm.client import LLMClient
+from app.core.llm.factory import build_llm_client_for_user
+from app.core.storage import StorageService, get_storage, keys
+from app.core.storage.documents import (
+    DOCX_CONTENT_TYPE,
+    PDF_CONTENT_TYPE,
+    persist_generated_document,
+)
 from app.models.job import Job
 from app.models.resume import Resume
 from app.schemas.resume import (
@@ -70,12 +78,10 @@ def _extract_skills_text_based(text: str) -> list[str]:
 def _extract_skills(text: str) -> list[str]:
     """Extract skills, trying spaCy-backed SkillMatcher first, then text-only."""
     try:
-        import spacy
-
+        from app.core.ats.nlp import get_nlp
         from app.core.ats.skill_matcher import SkillMatcher
 
-        nlp = spacy.load("en_core_web_sm")
-        matcher = SkillMatcher(nlp)
+        matcher = SkillMatcher(get_nlp())
         return sorted(matcher.extract_skills(text))
     except Exception:
         logger.info("spacy_unavailable_using_text_extraction")
@@ -85,6 +91,7 @@ def _extract_skills(text: str) -> list[str]:
 async def upload_resume(
     db: AsyncSession,
     file: UploadFile,
+    user_id: str,
 ) -> ResumeUploadResponse:
     """Upload, parse, and store a resume file.
 
@@ -135,12 +142,21 @@ async def upload_resume(
         # Try skill extraction on the raw text anyway
         skills_detected = _extract_skills(parsed_text)
 
+    # Move the upload into per-tenant storage (the column holds the storage key, not the
+    # local temp path); then drop the temp file used only for parsing.
+    upload_key = keys.upload_key(user_id, file_id, file_ext.lstrip("."))
+    content_type = PDF_CONTENT_TYPE if file_ext == ".pdf" else DOCX_CONTENT_TYPE
+    await StorageService(get_storage(), user_id).put(upload_key, content, content_type=content_type)
+    with contextlib.suppress(OSError):
+        dest.unlink()
+
     resume = Resume(
+        user_id=user_id,
         name=file.filename or "Untitled Resume",
         type="base",
         template_id="modern",
-        file_path_pdf=str(dest) if file_ext == ".pdf" else None,
-        file_path_docx=str(dest) if file_ext == ".docx" else None,
+        file_path_pdf=upload_key if file_ext == ".pdf" else None,
+        file_path_docx=upload_key if file_ext == ".docx" else None,
         content_text=parsed_text[:5000],
     )
     db.add(resume)
@@ -322,6 +338,7 @@ def _parse_education_section(text: str) -> list[dict]:
 async def generate_tailored_resume(
     db: AsyncSession,
     request: ResumeGenerateRequest,
+    user_id: str,
 ) -> ResumeResponse:
     """Generate a tailored resume for a specific job using LLM.
 
@@ -342,7 +359,7 @@ async def generate_tailored_resume(
     resume_data = _build_resume_data_from_text(base.content_text or "")
 
     # Generate via DocumentGenerator (LLM tailoring + rendering)
-    llm = LLMClient()
+    llm = await build_llm_client_for_user(db, user_id)
     generator = DocumentGenerator(llm_client=llm)
     doc = await generator.generate_resume(
         resume_data=resume_data,
@@ -351,15 +368,19 @@ async def generate_tailored_resume(
         formats=request.output_formats,
     )
 
+    # Move rendered files into per-tenant storage; columns hold the storage keys.
+    pdf_key, docx_key = await persist_generated_document(user_id, doc)
+
     # Create the tailored resume record
     tailored = Resume(
+        user_id=user_id,
         name=f"Tailored - {base.name}",
         type="tailored",
         template_id=request.template_id,
         base_resume_id=request.base_resume_id,
         job_id=request.job_id,
-        file_path_pdf=doc.pdf_path,
-        file_path_docx=doc.docx_path,
+        file_path_pdf=pdf_key,
+        file_path_docx=docx_key,
         content_text=base.content_text,
     )
     db.add(tailored)
@@ -417,8 +438,17 @@ async def score_resume(
         )
 
     try:
-        return _score_with_full_engine(
-            resume_id, request.job_id, resume_text, job_description, job,
+        # Offload the synchronous, CPU-bound spaCy scoring to a thread so it never blocks the
+        # event loop (the cached model in core.ats.nlp keeps the load cost one-time).
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            _score_with_full_engine,
+            resume_id,
+            request.job_id,
+            resume_text,
+            job_description,
+            job,
         )
     except Exception as exc:
         logger.warning(
@@ -438,14 +468,13 @@ def _score_with_full_engine(
     job: Job,
 ) -> ResumeScoreResponse:
     """Score using the full ResumeScorer with spaCy."""
-    import spacy
-
     from app.core.ats.experience_analyzer import ExperienceAnalyzer
     from app.core.ats.keyword_analyzer import KeywordAnalyzer
+    from app.core.ats.nlp import get_nlp
     from app.core.ats.scorer import ResumeScorer
     from app.core.ats.skill_matcher import SkillMatcher
 
-    nlp = spacy.load("en_core_web_sm")
+    nlp = get_nlp()
     skill_matcher = SkillMatcher(nlp)
     keyword_analyzer = KeywordAnalyzer(nlp)
     experience_analyzer = ExperienceAnalyzer(nlp)
@@ -541,6 +570,7 @@ def _score_with_text_fallback(
 async def optimize_resume(
     db: AsyncSession,
     resume_id: str,
+    user_id: str,
     job_id: str | None = None,
 ) -> ResumeResponse:
     """Optimize a resume for ATS compatibility using LLM rewriting.
@@ -582,9 +612,11 @@ async def optimize_resume(
     }
 
     try:
+        from app.core.ats.nlp import get_nlp
         from app.core.ats.optimizer import ATSOptimizer
         from app.core.ats.skill_matcher import SkillMatcher
-        optimizer = ATSOptimizer(skill_matcher=SkillMatcher())
+
+        optimizer = ATSOptimizer(skill_matcher=SkillMatcher(get_nlp()))
         from app.core.ats.scorer import ScoreDetails
         # Build a minimal ScoreDetails for the optimizer
         details = ScoreDetails(
@@ -610,7 +642,7 @@ async def optimize_resume(
     )
     from app.core.llm.prompts.resume_tailor import TailoredResumeData
 
-    llm = LLMClient()
+    llm = await build_llm_client_for_user(db, user_id)
     prompt = render_ats_optimize_prompt(
         resume_text, job_description, score_breakdown, suggestions,
     )
@@ -630,15 +662,18 @@ async def optimize_resume(
         formats=["pdf", "docx"],
     )
 
+    pdf_key, docx_key = await persist_generated_document(user_id, doc)
+
     # Create new optimized resume record
     optimized = Resume(
+        user_id=user_id,
         name=f"Optimized - {resume.name}",
         type="optimized",
         template_id=resume.template_id,
         base_resume_id=resume_id,
         job_id=target_job_id,
-        file_path_pdf=doc.pdf_path,
-        file_path_docx=doc.docx_path,
+        file_path_pdf=pdf_key,
+        file_path_docx=docx_key,
         content_text=resume_text,
     )
     db.add(optimized)

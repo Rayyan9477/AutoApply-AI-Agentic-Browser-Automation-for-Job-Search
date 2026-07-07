@@ -3,13 +3,15 @@
 Provides aggregated statistics for the dashboard UI.
 """
 
+from typing import Any
+
 import structlog
 from sqlalchemy import String as SAString
 from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.constants import ApplicationStatus
 from app.models.application import Application
+from app.models.enums import ApplicationStatus
 from app.models.job import Job
 from app.models.llm_usage import LLMUsage
 from app.schemas.analytics import (
@@ -180,48 +182,21 @@ async def get_timeline(db: AsyncSession) -> list[TimelineEntry]:
     Returns:
         Daily timeline entries.
     """
-    # Applications created per day
-    created_q = await db.execute(
-        select(
-            cast(Application.created_at, SAString).label("date"),
-            func.count(Application.id).label("cnt"),
-        )
-        .group_by(cast(Application.created_at, SAString))
-        .order_by(cast(Application.created_at, SAString).desc())
-        .limit(30),
-    )
-    created_by_date = {
-        str(r.date)[:10]: r.cnt for r in created_q.all()
-    }
+    async def _per_day(col: Any, *, only_non_null: bool = False) -> dict[str, int]:
+        # Truncate to the day (YYYY-MM-DD) IN SQL so each day is one group; grouping by the
+        # full timestamp would make every row its own group and the dict would overwrite
+        # same-day counts. LIMIT 30 then caps days, not timestamp-rows.
+        day = func.substr(cast(col, SAString), 1, 10).label("date")
+        query = select(day, func.count().label("cnt"))
+        if only_non_null:
+            query = query.where(col.isnot(None))
+        query = query.group_by(day).order_by(day.desc()).limit(30)
+        rows = (await db.execute(query)).all()
+        return {str(r.date): r.cnt for r in rows}
 
-    # Applications applied per day
-    applied_q = await db.execute(
-        select(
-            cast(Application.applied_at, SAString).label("date"),
-            func.count(Application.id).label("cnt"),
-        )
-        .where(Application.applied_at.isnot(None))
-        .group_by(cast(Application.applied_at, SAString))
-        .order_by(cast(Application.applied_at, SAString).desc())
-        .limit(30),
-    )
-    applied_by_date = {
-        str(r.date)[:10]: r.cnt for r in applied_q.all()
-    }
-
-    # Jobs found per day
-    jobs_q = await db.execute(
-        select(
-            cast(Job.created_at, SAString).label("date"),
-            func.count(Job.id).label("cnt"),
-        )
-        .group_by(cast(Job.created_at, SAString))
-        .order_by(cast(Job.created_at, SAString).desc())
-        .limit(30),
-    )
-    jobs_by_date = {
-        str(r.date)[:10]: r.cnt for r in jobs_q.all()
-    }
+    created_by_date = await _per_day(Application.created_at)
+    applied_by_date = await _per_day(Application.applied_at, only_non_null=True)
+    jobs_by_date = await _per_day(Job.created_at)
 
     all_dates = sorted(
         set(created_by_date) | set(applied_by_date) | set(jobs_by_date),
