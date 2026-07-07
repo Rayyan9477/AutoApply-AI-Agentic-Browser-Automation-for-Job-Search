@@ -12,7 +12,7 @@ services:
       - ENVIRONMENT=development
 
   worker:
-    command: python -m app.workers.application_worker
+    command: arq app.workers.tasks.WorkerSettings
     volumes:
       - ./backend:/app
       - ./data:/app/data

@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app/ ./app/
+# Document templates (repo root) — the worker also renders resumes/cover letters via run_apply.
+COPY templates/ ./templates/
 
 RUN pip install ".[postgres,aws]" \
     && python -m spacy download en_core_web_sm

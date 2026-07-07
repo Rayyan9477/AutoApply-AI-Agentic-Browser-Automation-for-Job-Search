@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
-    command: python -m app.workers.application_worker
+    command: arq app.workers.tasks.WorkerSettings
     env_file:
       - .env
     environment:

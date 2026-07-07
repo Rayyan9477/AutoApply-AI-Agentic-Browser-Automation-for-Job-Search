@@ -1,0 +1,6 @@
+# Automatic HTTPS (Let's Encrypt) + reverse proxy to the API. WebSocket upgrades on /ws
+# are handled transparently by reverse_proxy. Set DOMAIN in .env.prod (e.g. api.example.com).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:8000
+}

@@ -1,0 +1,49 @@
+# Production stack for a single VPS (Hetzner / Oracle Always-Free).
+#   DB    = external Neon Postgres (set DATABASE_URL in .env.prod)
+#   Files = Cloudflare R2 (STORAGE__* in .env.prod; S3-compatible)
+#   TLS   = Caddy (automatic Let's Encrypt for $DOMAIN)
+# Bring up:  docker compose -f docker-compose.prod.yml up -d --build
+# Migrate:   docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    env_file: [.env.prod]
+    depends_on: [redis]
+    expose: ["8000"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    env_file: [.env.prod]
+    depends_on: [redis]
+    mem_limit: 2g        # headful Chromium is RAM-hungry
+    shm_size: 1gb        # Chrome needs a large /dev/shm
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes: [redis_data:/data]
+
+volumes:
+  caddy_data:
+  caddy_config:
+  redis_data:

@@ -3,10 +3,11 @@
 from sqlalchemy import Float, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TenantMixin, TimestampMixin, UUIDPrimaryKeyMixin, pg_enum
+from app.models.enums import ResumeType
 
 
-class Resume(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+class Resume(UUIDPrimaryKeyMixin, TimestampMixin, TenantMixin, Base):
     """A resume document (base or tailored)."""
 
     __tablename__ = "resumes"
@@ -14,7 +15,9 @@ class Resume(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     # Identity
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    type: Mapped[str] = mapped_column(String(20), nullable=False, default="base")
+    type: Mapped[ResumeType] = mapped_column(
+        pg_enum(ResumeType, "resume_type"), nullable=False, default=ResumeType.BASE
+    )
 
     # Lineage (tailored resumes link to their base)
     base_resume_id: Mapped[str | None] = mapped_column(
