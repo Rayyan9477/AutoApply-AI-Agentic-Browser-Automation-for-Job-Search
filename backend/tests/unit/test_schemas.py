@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.analytics import (
-    AnalyticsResponse,
     ATSScoreDistribution,
     DashboardStats,
     LLMUsageStats,
@@ -282,22 +281,6 @@ class TestDashboardStats:
         assert stats.applications_offer == 0
         assert stats.avg_ats_score == 0.0
         assert stats.total_llm_cost_usd == 0.0
-
-
-# ---------------------------------------------------------------------------
-# AnalyticsResponse
-# ---------------------------------------------------------------------------
-
-
-class TestAnalyticsResponse:
-    def test_nested_model_construction(self):
-        stats = DashboardStats(total_jobs_found=10, total_applications=5)
-        resp = AnalyticsResponse(stats=stats)
-        assert resp.stats.total_jobs_found == 10
-        assert resp.funnel == []
-        assert resp.ats_distribution == []
-        assert resp.llm_usage == []
-        assert resp.timeline == []
 
 
 # ---------------------------------------------------------------------------

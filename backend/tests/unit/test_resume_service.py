@@ -9,11 +9,12 @@ from app.models.job import Job
 from app.models.resume import Resume
 from app.schemas.resume import ResumeGenerateRequest, ResumeScoreRequest
 from app.services import resume as resume_service
+from tests.conftest import TEST_USER_ID
 
 
 async def _create_base_resume(db_session, name="Base Resume"):
     """Helper to create a base resume record."""
-    r = Resume(name=name, type="base", template_id="modern")
+    r = Resume(user_id=TEST_USER_ID, name=name, type="base", template_id="modern")
     db_session.add(r)
     await db_session.commit()
     await db_session.refresh(r)
@@ -46,7 +47,7 @@ class TestGenerateTailoredResume:
             job_id=job.id,
             template_id="classic",
         )
-        result = await resume_service.generate_tailored_resume(db_session, request)
+        result = await resume_service.generate_tailored_resume(db_session, request, TEST_USER_ID)
 
         assert result.type == "tailored"
         assert result.base_resume_id == base.id
@@ -74,6 +75,7 @@ class TestScoreResume:
     async def test_score_resume_with_content(self, db_session, sample_job_data):
         """Resume with content_text returns real scores."""
         r = Resume(
+            user_id=TEST_USER_ID,
             name="Parsed Resume",
             type="base",
             template_id="modern",
@@ -103,7 +105,7 @@ class TestUploadResume:
         mock_file.read = AsyncMock(return_value=b"fake pdf content here with enough words to count")
 
         with patch.object(resume_service, "UPLOAD_DIR", tmp_path):
-            result = await resume_service.upload_resume(db_session, mock_file)
+            result = await resume_service.upload_resume(db_session, mock_file, TEST_USER_ID)
 
         assert result.name == "my_resume.pdf"
         assert result.file_format == "pdf"
@@ -116,7 +118,7 @@ class TestUploadResume:
         mock_file.read = AsyncMock(return_value=b"fake docx content")
 
         with patch.object(resume_service, "UPLOAD_DIR", tmp_path):
-            result = await resume_service.upload_resume(db_session, mock_file)
+            result = await resume_service.upload_resume(db_session, mock_file, TEST_USER_ID)
 
         assert result.file_format == "docx"
 
@@ -126,7 +128,7 @@ class TestUploadResume:
         mock_file.read = AsyncMock(return_value=b"content")
 
         with patch.object(resume_service, "UPLOAD_DIR", tmp_path):
-            result = await resume_service.upload_resume(db_session, mock_file)
+            result = await resume_service.upload_resume(db_session, mock_file, TEST_USER_ID)
 
         assert result.name == "Untitled Resume"
         assert result.file_format == "pdf"
