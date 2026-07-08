@@ -175,3 +175,47 @@ class TestStructuredOutput:
 
             with pytest.raises(LLMProviderError, match="Failed to parse"):
                 await client.complete_with_structured_output("prompt", SampleOutput)
+
+
+# ---------------------------------------------------------------------------
+# per-user usage persistence (Phase 3.6)
+# ---------------------------------------------------------------------------
+
+
+def _client_with_user(user_id: str = "u-1") -> LLMClient:
+    with patch("app.core.llm.client.get_settings", return_value=_make_settings_mock()):
+        with patch("app.core.llm.client.litellm"):
+            return LLMClient(user_id=user_id)
+
+
+class TestUsagePersist:
+    async def test_persists_usage_for_bound_user(self) -> None:
+        client = _client_with_user("u-42")
+        mock_response = _make_completion_response("ok")
+
+        with patch("app.core.llm.client.litellm") as mock_litellm, patch(
+            "app.core.llm.usage_tracker.persist_usage_for_user", new=AsyncMock()
+        ) as persist:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+            mock_litellm.completion_cost.return_value = 0.002
+            mock_litellm.Usage = MagicMock
+            await client.complete("prompt", purpose="cover_letter")
+
+        persist.assert_awaited_once()
+        call = persist.await_args
+        assert call.args[0] == "u-42"
+        assert isinstance(call.args[1], LLMResponse)
+        assert call.args[2] == "cover_letter"
+
+    async def test_no_persist_when_unbound(self, client: LLMClient) -> None:
+        mock_response = _make_completion_response("ok")
+
+        with patch("app.core.llm.client.litellm") as mock_litellm, patch(
+            "app.core.llm.usage_tracker.persist_usage_for_user", new=AsyncMock()
+        ) as persist:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+            mock_litellm.completion_cost.return_value = 0.0
+            mock_litellm.Usage = MagicMock
+            await client.complete("prompt")
+
+        persist.assert_not_awaited()

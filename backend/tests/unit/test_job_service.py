@@ -8,6 +8,7 @@ from app.core.exceptions import RecordNotFoundError
 from app.models.job import Job
 from app.schemas.job import JobSearchRequest
 from app.services import job_search
+from tests.conftest import TEST_USER_ID
 
 
 def _fix_job_data(sample_job_data: dict) -> dict:
@@ -31,7 +32,7 @@ class TestSearchJobs:
             "list_platforms",
             return_value=[],
         ):
-            result = await job_search.search_jobs(db_session, request)
+            result = await job_search.search_jobs(db_session, request, TEST_USER_ID)
         assert result.items == []
         assert result.total == 0
         assert result.page == 1
@@ -67,7 +68,7 @@ class TestSearchJobs:
                 return_value=mock_platform,
             ),
         ):
-            result = await job_search.search_jobs(db_session, request)
+            result = await job_search.search_jobs(db_session, request, TEST_USER_ID)
 
         assert result.total == 1
         assert result.items[0].title == "Python Dev"
@@ -94,7 +95,7 @@ class TestSearchJobs:
                 return_value=mock_platform,
             ),
         ):
-            result = await job_search.search_jobs(db_session, request)
+            result = await job_search.search_jobs(db_session, request, TEST_USER_ID)
 
         assert result.total == 0
         assert result.items == []
