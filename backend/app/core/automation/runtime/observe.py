@@ -131,7 +131,6 @@ def extract_run_signals(history: Any) -> dict[str, Any]:
     raw_errors = _call(history, "errors", []) or []
     errors = [e for e in raw_errors if e]
     urls = [u for u in (_call(history, "urls", []) or []) if u]
-    actions = [a for a in (_call(history, "action_names", []) or []) if a]
     evaluations = [
         getattr(t, "evaluation_previous_goal", None)
         for t in (_call(history, "model_thoughts", []) or [])
@@ -145,12 +144,23 @@ def extract_run_signals(history: Any) -> dict[str, Any]:
         else:
             break
 
+    # Loop detection on a per-step composite (url + action + next_goal) rather than URL alone:
+    # modal/SPA apply forms (e.g. LinkedIn Easy Apply) keep the same URL while progressing, so a
+    # URL-only check misreads a normal multi-step fill as a loop. Fall back to URLs when no
+    # per-step structure is available.
+    steps = _build_steps(history)
+    step_keys = (
+        [f"{s.get('url')}|{s.get('action')}|{s.get('next_goal')}" for s in steps]
+        if steps
+        else urls
+    )
+
     joined = " ".join(errors).lower()
     signals: dict[str, Any] = {
         "errors": errors,
         "evaluations": [e for e in evaluations if e],
         "consecutive_failures": consecutive,
-        "loop_detected": _detect_loop(urls, actions),
+        "loop_detected": _detect_loop(step_keys),
         "timed_out": "timeout" in joined or "timed out" in joined,
         "llm_error": "llm" in joined or "rate limit" in joined,
     }

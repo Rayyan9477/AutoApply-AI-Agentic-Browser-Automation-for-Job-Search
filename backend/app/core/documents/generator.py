@@ -358,13 +358,20 @@ class DocumentGenerator:
         # Use template if available, otherwise fall back to inline HTML
         if (template_dir / "template.html").exists():
             from jinja2 import Environment, FileSystemLoader, select_autoescape
+            from markupsafe import Markup
 
             env = Environment(
                 loader=FileSystemLoader(str(template_dir)),
                 autoescape=select_autoescape(["html"]),
             )
             html_tpl = env.get_template("template.html")
-            html_content = html_tpl.render(content=content)
+            # The LLM returns plain prose with blank-line-separated paragraphs. Wrap them in <p>
+            # (the templates' CSS styles `.body p`) and mark safe so autoescape leaves the tags —
+            # otherwise the whole letter collapses into one run-on block. Escape the text first.
+            paragraphs_html = "".join(
+                f"<p>{Markup.escape(p.strip())}</p>" for p in content.split("\n\n") if p.strip()
+            )
+            html_content = html_tpl.render(content=Markup(paragraphs_html))
 
             css_path = template_dir / "style.css"
             css_string: str | None = None

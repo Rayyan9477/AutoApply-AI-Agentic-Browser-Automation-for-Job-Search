@@ -7,7 +7,8 @@ tenant-scoped), so application counts bypass the tenant filter.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import structlog
 from sqlalchemy import func, select
@@ -22,11 +23,12 @@ logger = structlog.get_logger(__name__)
 MIN_SAMPLE = 5
 FAILED_RATE_THRESHOLD = 0.5
 QUEUE_DEPTH_THRESHOLD = 100
+RECENT_WINDOW_HOURS = 6  # only count applications from the recent window (not all-time)
 _ARQ_QUEUE = "arq:queue"
 
 
 def _issue(
-    category: str, severity: str, signals: dict, diagnosis: str, now: datetime
+    category: str, severity: str, signals: dict[str, Any], diagnosis: str, now: datetime
 ) -> SystemIssue:
     return SystemIssue(
         category=category,
@@ -38,34 +40,77 @@ def _issue(
     )
 
 
+async def _upsert_issue(
+    db: AsyncSession,
+    *,
+    category: str,
+    severity: str,
+    signals: dict[str, Any],
+    diagnosis: str,
+    now: datetime,
+) -> SystemIssue:
+    """Refresh the existing OPEN issue of this category, or open a new one.
+
+    Prevents the detector (which runs every 15 min) from re-inserting an identical row on every
+    tick for a single ongoing condition — the table would otherwise grow without bound.
+    """
+    existing = (
+        await db.execute(
+            select(SystemIssue).where(
+                SystemIssue.category == category, SystemIssue.status == "open"
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.severity = severity
+        existing.signals = signals
+        existing.diagnosis = diagnosis
+        existing.detected_at = now
+        return existing
+    issue = _issue(category, severity, signals, diagnosis, now)
+    db.add(issue)
+    return issue
+
+
 async def detect_anomalies(
-    db: AsyncSession, *, redis: object | None = None, now: datetime | None = None
+    db: AsyncSession, *, redis: Any | None = None, now: datetime | None = None
 ) -> list[SystemIssue]:
     """Inspect workflow health and persist any detected ``SystemIssue`` rows."""
     now = now or datetime.now(UTC)
+    # Compare against the naive-UTC column (created_at is DateTime without tz); deriving a naive
+    # bound keeps the window correct on both SQLite and Postgres.
+    naive_now = now.replace(tzinfo=None) if now.tzinfo else now
+    window_start = naive_now - timedelta(hours=RECENT_WINDOW_HOURS)
     issues: list[SystemIssue] = []
 
-    # 1. High recent application-failure rate (global; bypass the tenant filter).
+    # 1. High RECENT application-failure rate (global; bypass the tenant filter). Windowed so an
+    #    acute outage fires even on a mature deploy, and old failures age out after they recover.
     total = (
         await db.execute(
-            select(func.count(Application.id)).execution_options(skip_tenant_filter=True)
+            select(func.count(Application.id))
+            .where(Application.created_at >= window_start)
+            .execution_options(skip_tenant_filter=True)
         )
     ).scalar() or 0
     failed = (
         await db.execute(
             select(func.count(Application.id))
-            .where(Application.status == ApplicationStatus.FAILED)
+            .where(
+                Application.status == ApplicationStatus.FAILED,
+                Application.created_at >= window_start,
+            )
             .execution_options(skip_tenant_filter=True)
         )
     ).scalar() or 0
     if total >= MIN_SAMPLE and failed / total >= FAILED_RATE_THRESHOLD:
         issues.append(
-            _issue(
-                "apply_failure_rate",
-                "critical",
-                {"total": total, "failed": failed},
-                f"{failed}/{total} applications are in FAILED state",
-                now,
+            await _upsert_issue(
+                db,
+                category="apply_failure_rate",
+                severity="critical",
+                signals={"total": total, "failed": failed, "window_hours": RECENT_WINDOW_HOURS},
+                diagnosis=f"{failed}/{total} apps FAILED in the last {RECENT_WINDOW_HOURS}h",
+                now=now,
             )
         )
 
@@ -77,11 +122,16 @@ async def detect_anomalies(
             depth = 0
         if depth and depth > QUEUE_DEPTH_THRESHOLD:
             issues.append(
-                _issue("queue_depth", "warning", {"depth": depth}, f"Queue backlog: {depth}", now)
+                await _upsert_issue(
+                    db,
+                    category="queue_depth",
+                    severity="warning",
+                    signals={"depth": depth},
+                    diagnosis=f"Queue backlog: {depth}",
+                    now=now,
+                )
             )
 
-    for issue in issues:
-        db.add(issue)
     if issues:
         await db.commit()
         for issue in issues:

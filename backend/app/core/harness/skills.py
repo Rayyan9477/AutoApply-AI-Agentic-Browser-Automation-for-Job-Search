@@ -28,12 +28,35 @@ _PII_PATTERNS = [
     re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),  # email
     re.compile(r"\b\+?\d[\d\-\s().]{7,}\d\b"),  # phone
     re.compile(r"(?:sk-|ghp_|xox[baprs]-|AKIA|Bearer\s)[A-Za-z0-9_\-]{8,}"),  # keys/tokens
+    # street address (capitalized street name required, to avoid matching skill prose)
+    re.compile(
+        r"\b\d{1,5}\s+(?:[A-Z][a-z]+\s+){1,3}"
+        r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Lane|Dr|Drive)\b"
+    ),
 ]
+
+
+def _contains_person_name(content: str) -> bool:
+    """True if spaCy NER finds a full personal name (>=2 tokens).
+
+    DomainSkills are shared across tenants, so a distilled run summary that leaked a candidate's
+    name must not be stored. Requires >=2 tokens so single-word tech terms don't false-positive;
+    falls back to the regex gate only if the model is unavailable.
+    """
+    try:
+        from app.core.ats.nlp import get_nlp
+
+        doc = get_nlp()(content)
+    except Exception:
+        return False
+    return any(ent.label_ == "PERSON" and len(ent.text.split()) >= 2 for ent in doc.ents)
 
 
 def pii_clean(content: str) -> bool:
     """Return True if ``content`` has no detectable PII/secrets (pre-storage gate)."""
-    return not any(pattern.search(content) for pattern in _PII_PATTERNS)
+    if any(pattern.search(content) for pattern in _PII_PATTERNS):
+        return False
+    return not _contains_person_name(content)
 
 
 async def record_skill(
@@ -48,6 +71,21 @@ async def record_skill(
     if not pii_clean(content):
         logger.warning("skill.pii_rejected", domain=domain)
         return None
+    # Content dedup: the distiller runs after every apply, so an unchanged site keeps producing
+    # the same guidance. If it already exists ACTIVE for the domain, return it instead of piling
+    # up identical rows (unbounded growth). Distinct guidance still coexists (that's by design).
+    duplicate = (
+        await db.execute(
+            select(DomainSkill).where(
+                DomainSkill.domain == domain,
+                DomainSkill.content == content,
+                DomainSkill.status == SkillStatus.ACTIVE,
+            )
+        )
+    ).scalar_one_or_none()
+    if duplicate is not None:
+        logger.info("skill.duplicate_skipped", domain=domain, version=duplicate.version)
+        return duplicate
     # SELECT max(version)+INSERT races the uq_domain_skill_version constraint under
     # concurrent distillation; retry on the resulting IntegrityError.
     for _ in range(_VERSION_RETRIES):

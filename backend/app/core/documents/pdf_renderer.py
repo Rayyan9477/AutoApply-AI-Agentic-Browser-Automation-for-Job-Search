@@ -93,8 +93,8 @@ class PDFRenderer:
         output_path: Path,
     ) -> Path:
         """Synchronous rendering pipeline: Jinja2 -> HTML -> WeasyPrint -> PDF."""
-        from jinja2 import Environment, FileSystemLoader
-        from weasyprint import CSS, HTML
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+        from weasyprint import CSS, HTML  # type: ignore[import-untyped]
 
         template_dir = self._templates_dir / "resume" / template_name
         if not template_dir.exists():
@@ -110,7 +110,13 @@ class PDFRenderer:
                 f"template.html not found in {template_dir}",
             )
 
-        env = Environment(loader=FileSystemLoader(str(template_dir)))
+        # autoescape on: resume fields are user text; without it, values containing <, >, & are
+        # parsed as HTML by WeasyPrint and silently dropped. All resume templates interpolate
+        # plain text (no |safe), so escaping is correct.
+        env = Environment(
+            loader=FileSystemLoader(str(template_dir)),
+            autoescape=select_autoescape(["html", "xml"]),
+        )
         template = env.get_template("template.html")
         html_content = template.render(**context)
 
@@ -145,7 +151,7 @@ class PDFRenderer:
         css_string: str | None,
     ) -> Path:
         """Render raw HTML string to PDF."""
-        from weasyprint import CSS, HTML
+        from weasyprint import CSS, HTML  # (untyped module already ignored in _render_sync)
 
         stylesheets: list[CSS] = []
         if css_string:
