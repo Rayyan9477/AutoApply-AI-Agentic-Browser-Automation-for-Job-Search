@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job
+from tests.conftest import TEST_USER_ID
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -17,6 +18,7 @@ from app.models.job import Job
 async def _create_job_in_db(db: AsyncSession, idx: int = 1) -> Job:
     """Insert a Job row directly and return the model instance."""
     job = Job(
+        user_id=TEST_USER_ID,
         platform="linkedin",
         platform_job_id=f"e2e-job-{idx}",
         title=f"Python Developer {idx}",
@@ -83,12 +85,13 @@ class TestFullJobSearchToApplicationPipeline:
         app_data = resp.json()
         app_id = app_data["id"]
         assert app_data["job_id"] == job_id
-        assert app_data["status"] == "queued"
+        # Default (review) mode stages for approval.
+        assert app_data["status"] == "pending_review"
 
         # Step 6: GET /api/v1/applications/{app_id}
         resp = await client.get(f"/api/v1/applications/{app_id}")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "queued"
+        assert resp.json()["status"] == "pending_review"
 
         # Step 7: PUT /api/v1/applications/{app_id}/approve
         resp = await client.put(f"/api/v1/applications/{app_id}/approve")
@@ -138,9 +141,9 @@ class TestBatchApplicationWorkflow:
         listing = resp.json()
         assert listing["total"] >= 3
 
-        # All are in "queued" status
+        # All are staged for approval (default review mode).
         for app_resp in batch:
-            assert app_resp["status"] == "queued"
+            assert app_resp["status"] == "pending_review"
 
 
 # ---------------------------------------------------------------------------
@@ -152,8 +155,9 @@ class TestDashboardReflectsApplicationState:
     async def test_dashboard_reflects_application_state(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        # Create a job and two applications with different statuses
+        # Two distinct jobs (at most one active application per job).
         job = await _create_job_in_db(db_session, idx=300)
+        job2 = await _create_job_in_db(db_session, idx=301)
 
         resp1 = await client.post(
             "/api/v1/applications/",
@@ -164,7 +168,7 @@ class TestDashboardReflectsApplicationState:
 
         resp2 = await client.post(
             "/api/v1/applications/",
-            json={"job_id": job.id},
+            json={"job_id": job2.id},
         )
         assert resp2.status_code == 201
 

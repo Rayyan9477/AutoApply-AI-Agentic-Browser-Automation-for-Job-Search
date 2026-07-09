@@ -4,6 +4,7 @@ import pytest
 
 from app.models.application import Application
 from app.models.job import Job
+from tests.conftest import TEST_USER_ID
 
 API_PREFIX = "/api/v1/applications"
 
@@ -30,6 +31,7 @@ async def sample_job(db_session, job_data):
 async def sample_application(db_session, sample_job):
     """Create and return a persisted Application linked to sample_job."""
     app = Application(
+        user_id=TEST_USER_ID,
         job_id=sample_job.id,
         apply_mode="review",
         status="queued",
@@ -52,7 +54,8 @@ class TestCreateApplication:
         assert response.status_code == 201
         body = response.json()
         assert body["job_id"] == sample_job.id
-        assert body["status"] == "queued"
+        # review mode stages for approval rather than enqueueing immediately
+        assert body["status"] == "pending_review"
         assert body["apply_mode"] == "review"
         assert "id" in body
         assert "created_at" in body

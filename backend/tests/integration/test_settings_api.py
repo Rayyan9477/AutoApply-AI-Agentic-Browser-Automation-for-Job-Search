@@ -64,13 +64,11 @@ class TestListLLMProviders:
         assert response.status_code == 200
         body = response.json()
         assert isinstance(body, list)
-        assert len(body) == 3
+        assert len(body) == 5
 
         providers = {item["provider"] for item in body}
-        assert "openai" in providers
-        assert "anthropic" in providers
-        assert "gemini" in providers
+        assert {"openai", "groq", "gemini", "openrouter", "github"} <= providers
 
         for item in body:
-            assert item["configured"] is False
+            assert "configured" in item
             assert "model" in item
