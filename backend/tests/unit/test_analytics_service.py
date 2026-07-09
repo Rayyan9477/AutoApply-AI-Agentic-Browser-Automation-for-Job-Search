@@ -1,9 +1,10 @@
 """Unit tests for the analytics service."""
 
-from app.config.constants import ApplicationStatus
 from app.models.application import Application
+from app.models.enums import ApplicationStatus
 from app.models.job import Job
 from app.services import analytics
+from tests.conftest import TEST_USER_ID
 
 
 async def _create_job(db_session, sample_job_data, suffix="0"):
@@ -17,6 +18,7 @@ async def _create_job(db_session, sample_job_data, suffix="0"):
 
 async def _create_application(db_session, job_id, status, ats_score=None):
     app = Application(
+        user_id=TEST_USER_ID,
         job_id=job_id,
         status=status,
         apply_mode="review",
@@ -41,16 +43,20 @@ class TestGetDashboardStats:
         assert stats.avg_ats_score == 0.0
 
     async def test_dashboard_stats_with_data(self, db_session, sample_job_data):
-        job = await _create_job(db_session, sample_job_data)
-
-        await _create_application(db_session, job.id, ApplicationStatus.PENDING_REVIEW)
-        await _create_application(db_session, job.id, ApplicationStatus.APPLIED)
-        await _create_application(db_session, job.id, ApplicationStatus.APPLIED)
-        await _create_application(db_session, job.id, ApplicationStatus.INTERVIEW)
-        await _create_application(db_session, job.id, ApplicationStatus.REJECTED)
+        # One distinct job per application (at most one active application per job).
+        statuses = [
+            ApplicationStatus.PENDING_REVIEW,
+            ApplicationStatus.APPLIED,
+            ApplicationStatus.APPLIED,
+            ApplicationStatus.INTERVIEW,
+            ApplicationStatus.REJECTED,
+        ]
+        for i, status in enumerate(statuses):
+            job = await _create_job(db_session, sample_job_data, suffix=str(i))
+            await _create_application(db_session, job.id, status)
 
         stats = await analytics.get_dashboard_stats(db_session)
-        assert stats.total_jobs_found == 1
+        assert stats.total_jobs_found == 5
         assert stats.total_applications == 5
         assert stats.applications_pending == 1
         assert stats.applications_applied == 2

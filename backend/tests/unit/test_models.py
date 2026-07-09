@@ -9,6 +9,7 @@ from app.models.job import Job
 from app.models.llm_usage import LLMUsage
 from app.models.resume import Resume
 from app.models.user_settings import UserSettings
+from tests.conftest import TEST_USER_ID
 
 
 class TestJobModel:
@@ -74,6 +75,7 @@ class TestResumeModel:
     async def test_create_base_resume(self, db_session: AsyncSession) -> None:
         """Base resume should be created without job or parent reference."""
         resume = Resume(
+            user_id=TEST_USER_ID,
             name="My Resume",
             type="base",
             template_id="modern",
@@ -104,6 +106,7 @@ class TestApplicationModel:
         await db_session.flush()
 
         application = Application(
+            user_id=TEST_USER_ID,
             job_id=job.id,
             status="queued",
             apply_mode="review",
@@ -122,6 +125,7 @@ class TestLLMUsageModel:
     async def test_create_llm_usage_record(self, db_session: AsyncSession) -> None:
         """LLM usage record should store provider, tokens, and cost."""
         usage = LLMUsage(
+            user_id=TEST_USER_ID,
             provider="openai",
             model="gpt-4o",
             prompt_tokens=150,
@@ -147,15 +151,15 @@ class TestLLMUsageModel:
 
 
 class TestUserSettingsModel:
-    """Test UserSettings singleton model."""
+    """Test UserSettings per-user model."""
 
     async def test_create_default_settings(self, db_session: AsyncSession) -> None:
-        """Default user settings should be created with singleton id."""
-        settings = UserSettings()
+        """Default user settings should be created per-user (user_id is the PK)."""
+        settings = UserSettings(user_id=TEST_USER_ID)
         db_session.add(settings)
         await db_session.commit()
 
-        assert settings.id == "singleton"
+        assert settings.user_id == TEST_USER_ID
         assert settings.apply_mode == "review"
         assert settings.max_parallel == 3
         assert settings.min_ats_score == 0.75
