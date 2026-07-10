@@ -37,6 +37,40 @@ const sampleJob2 = {
 
 /** MSW v2 request handlers for all API endpoints. */
 export const handlers = [
+  // Auth
+  http.post('/api/v1/auth/register', async ({ request }) => {
+    const body = (await request.json()) as { email: string; full_name?: string };
+    return HttpResponse.json(
+      { id: 'user-1', email: body.email, full_name: body.full_name ?? null, is_active: true },
+      { status: 201 },
+    );
+  }),
+
+  http.post('/api/v1/auth/login', () => {
+    return HttpResponse.json({ access_token: 'test-access-token', token_type: 'bearer' });
+  }),
+
+  http.get('/api/v1/auth/me', ({ request }) => {
+    if (!request.headers.get('Authorization')) {
+      return new HttpResponse(null, { status: 401 });
+    }
+    return HttpResponse.json({
+      id: 'user-1',
+      email: 'test@example.com',
+      full_name: null,
+      is_active: true,
+    });
+  }),
+
+  http.get('/api/v1/auth/ws-ticket', () => {
+    return HttpResponse.json({ ticket: 'test-ws-ticket' });
+  }),
+
+  // Phase-0 has no refresh endpoint; default to "no session".
+  http.post('/api/v1/auth/refresh', () => {
+    return new HttpResponse(null, { status: 401 });
+  }),
+
   // Jobs
   http.get('/api/v1/jobs/', () => {
     return HttpResponse.json({

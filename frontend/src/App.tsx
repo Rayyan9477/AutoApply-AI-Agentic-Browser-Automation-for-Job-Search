@@ -1,52 +1,50 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
 
 import AppLayout from '@/components/layout/AppLayout';
+import Toaster from '@/components/ui/Toaster';
 import DashboardPage from '@/pages/DashboardPage';
 import JobSearchPage from '@/pages/JobSearchPage';
 import ApplicationsPage from '@/pages/ApplicationsPage';
+import AppDetailPage from '@/pages/AppDetailPage';
 import ResumesPage from '@/pages/ResumesPage';
 import SettingsPage from '@/pages/SettingsPage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
-import { useAppStore } from '@/store/useAppStore';
+import AdminPage from '@/pages/AdminPage';
+import OnboardingPage from '@/pages/OnboardingPage';
+import LandingPage from '@/pages/LandingPage';
+import LoginPage from '@/pages/LoginPage';
+import RegisterPage from '@/pages/RegisterPage';
+import { RequireAuth } from '@/components/auth/RequireAuth';
+import { PublicOnly } from '@/components/auth/PublicOnly';
 
 function App() {
-  const notification = useAppStore((s) => s.notification);
-  const clearNotification = useAppStore((s) => s.clearNotification);
-
   return (
     <>
       <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<PublicOnly><LandingPage /></PublicOnly>} />
+        <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
+        <Route path="/register" element={<PublicOnly redirectTo="/onboarding"><RegisterPage /></PublicOnly>} />
+        <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
+        <Route
+          element={
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
+          }
+        >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/jobs" element={<JobSearchPage />} />
           <Route path="/applications" element={<ApplicationsPage />} />
+          <Route path="/applications/:id" element={<AppDetailPage />} />
           <Route path="/resumes" element={<ResumesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>
 
-      <Snackbar
-        open={!!notification}
-        autoHideDuration={5000}
-        onClose={clearNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        {notification ? (
-          <Alert
-            onClose={clearNotification}
-            severity={notification.severity}
-            variant="filled"
-            sx={{ width: '100%' }}
-          >
-            {notification.message}
-          </Alert>
-        ) : undefined}
-      </Snackbar>
+      <Toaster />
     </>
   );
 }
