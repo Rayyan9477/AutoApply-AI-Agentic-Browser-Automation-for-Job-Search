@@ -40,7 +40,7 @@ async def create_application(
     """Create a single job application and dispatch it according to apply_mode."""
     app = await app_service.create_application(db, data, user.id)
     await dispatch.dispatch_for_mode(db, pool, app)
-    return ApplicationResponse.model_validate(app)
+    return app_service.application_to_response(app)
 
 
 @router.post(
@@ -59,7 +59,7 @@ async def batch_create(
     apps = await app_service.create_batch(db, data, user.id)
     for app in apps:
         await dispatch.dispatch_for_mode(db, pool, app)
-    return [ApplicationResponse.model_validate(a) for a in apps]
+    return [app_service.application_to_response(a) for a in apps]
 
 
 @router.get("/", response_model=ApplicationListResponse, summary="List applications")
@@ -95,7 +95,7 @@ async def get_application(
 ) -> ApplicationResponse:
     """Get one of the current user's applications by ID. Returns 404 if not found."""
     app = await app_service.get_application(db, app_id)
-    return ApplicationResponse.model_validate(app)
+    return app_service.application_to_response(app)
 
 
 @router.put(
@@ -111,7 +111,7 @@ async def approve_application(
     """Approve a pending application and enqueue it for automated submission."""
     app = await app_service.approve_application(db, app_id)
     await dispatch.enqueue_apply(pool, app.id)
-    return ApplicationResponse.model_validate(app)
+    return app_service.application_to_response(app)
 
 
 @router.post(
@@ -160,4 +160,4 @@ async def update_status(
 ) -> ApplicationResponse:
     """Update an application's status and optional notes."""
     app = await app_service.update_status(db, app_id, update)
-    return ApplicationResponse.model_validate(app)
+    return app_service.application_to_response(app)

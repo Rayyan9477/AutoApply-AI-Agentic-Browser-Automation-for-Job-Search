@@ -8,6 +8,7 @@ from typing import Any
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError as DBIntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,6 +28,20 @@ from app.schemas.application import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def application_to_response(app: Application) -> ApplicationResponse:
+    """Serialize an Application, hydrating job_title/company from the related job.
+
+    The denormalized display fields are only filled when the ``job`` relationship is already
+    loaded (list/detail eager-load it); callers that pass an object without it loaded — e.g.
+    a freshly created row — get ``None``, and never trigger a lazy load in the async context.
+    """
+    item = ApplicationResponse.model_validate(app)
+    if "job" not in sa_inspect(app).unloaded and app.job is not None:
+        item.job_title = app.job.title
+        item.company = app.job.company
+    return item
 
 # States that DON'T block a fresh application for the same (user, job) — mirrors the
 # partial-unique ``uq_app_active_job`` index.
@@ -196,13 +211,7 @@ async def list_applications(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    items: list[ApplicationResponse] = []
-    for app in apps:
-        item = ApplicationResponse.model_validate(app)
-        if app.job is not None:
-            item.job_title = app.job.title
-            item.company = app.job.company
-        items.append(item)
+    items = [application_to_response(app) for app in apps]
 
     return ApplicationListResponse(
         items=items,
@@ -227,7 +236,9 @@ async def get_application(db: AsyncSession, app_id: str) -> Application:
         RecordNotFoundError: If application does not exist.
     """
     result = await db.execute(
-        select(Application).where(Application.id == app_id),
+        select(Application)
+        .where(Application.id == app_id)
+        .options(selectinload(Application.job)),
     )
     app = result.scalar_one_or_none()
     if app is None:
