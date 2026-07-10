@@ -1,0 +1,81 @@
+/* AutoApply AI — design tokens (ported verbatim from the Claude Design prototype).
+   Dark is the default; [data-theme="light"] and [data-density="compact"] are set on the
+   app root by useUiStore. Everything downstream references these CSS variables only. */
+
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+body { background: #0a0c0e; }
+
+:root {
+  --bg:#0a0c0e;--bg-2:#0c0f11;--surface:#131719;--surface-2:#181d20;--surface-3:#0e1214;--hover:#1b2125;
+  --border:rgba(255,255,255,.075);--border-2:rgba(255,255,255,.13);--border-3:rgba(255,255,255,.2);
+  --text:#e9eef1;--text-2:#a2acb2;--text-3:#69737a;--text-4:#495159;
+  --accent:#1fd8c0;--accent-2:#42e7d3;--accent-3:#11b6a2;--accent-ink:#04120f;
+  --accent-soft:rgba(31,216,192,.13);--accent-line:rgba(31,216,192,.34);--accent-glow:rgba(31,216,192,.3);
+  --q:#7f8a99;--q-soft:rgba(127,138,153,.14);
+  --review:#f5b13f;--review-soft:rgba(245,177,63,.14);--review-line:rgba(245,177,63,.34);
+  --approved:#4f9cf9;--approved-soft:rgba(79,156,249,.14);
+  --applied:#3ecf7a;--applied-soft:rgba(62,207,122,.14);
+  --interview:#a488fb;--interview-soft:rgba(164,136,251,.15);
+  --offer:#22e0a1;--offer-soft:rgba(34,224,161,.15);
+  --rejected:#fb7185;--rejected-soft:rgba(251,113,133,.13);
+  --withdrawn:#828a92;--failed:#f0563f;--failed-soft:rgba(240,86,63,.14);
+  --shadow-1:0 1px 2px rgba(0,0,0,.5),0 1px 1px rgba(0,0,0,.3);
+  --shadow-2:0 20px 44px -20px rgba(0,0,0,.72),0 4px 12px -6px rgba(0,0,0,.5);
+  --shadow-pop:0 30px 70px -22px rgba(0,0,0,.78),0 8px 20px -10px rgba(0,0,0,.5);
+  --r-xs:6px;--r-sm:8px;--r-md:10px;--r-lg:14px;--r-xl:18px;--r-2xl:24px;
+  --row-h:44px;--dense-py:12px;
+  --ease:cubic-bezier(.22,1,.36,1);--ease-io:cubic-bezier(.65,0,.35,1);
+  --font:'Hanken Grotesk',system-ui,-apple-system,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+
+[data-theme="light"] {
+  --bg:#f3f5f6;--bg-2:#eaedef;--surface:#ffffff;--surface-2:#f5f7f8;--surface-3:#eef1f3;--hover:#eef1f3;
+  --border:rgba(12,20,26,.09);--border-2:rgba(12,20,26,.15);--border-3:rgba(12,20,26,.26);
+  --text:#0e1518;--text-2:#4b565d;--text-3:#78838a;--text-4:#9aa4aa;
+  --accent:#0aa895;--accent-2:#0cbfaa;--accent-3:#08897b;--accent-ink:#ffffff;
+  --accent-soft:rgba(10,168,149,.1);--accent-line:rgba(10,168,149,.28);--accent-glow:rgba(10,168,149,.22);
+  --q:#6b7480;--q-soft:rgba(107,116,128,.1);
+  --review:#c4820a;--review-soft:rgba(196,130,10,.1);--review-line:rgba(196,130,10,.28);
+  --approved:#2b7de6;--approved-soft:rgba(43,125,230,.1);
+  --applied:#12a259;--applied-soft:rgba(18,162,89,.1);
+  --interview:#7b5ce6;--interview-soft:rgba(123,92,230,.11);
+  --offer:#0bab72;--offer-soft:rgba(11,171,114,.11);
+  --rejected:#e14b62;--rejected-soft:rgba(225,75,98,.1);
+  --withdrawn:#7a838b;--failed:#dc4327;--failed-soft:rgba(220,67,39,.1);
+  --shadow-1:0 1px 2px rgba(15,30,40,.06),0 1px 1px rgba(15,30,40,.04);
+  --shadow-2:0 20px 44px -20px rgba(15,30,40,.18),0 3px 10px -5px rgba(15,30,40,.1);
+  --shadow-pop:0 30px 70px -20px rgba(15,30,40,.22),0 8px 20px -10px rgba(15,30,40,.12);
+}
+
+[data-density="compact"] { --row-h:37px; --dense-py:8px; }
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -.01em;
+}
+
+::selection { background: var(--accent-soft); }
+::-webkit-scrollbar { width:10px; height:10px; }
+::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:8px; border:2px solid transparent; background-clip:padding-box; }
+::-webkit-scrollbar-thumb:hover { background:var(--border-3); }
+::-webkit-scrollbar-track { background:transparent; }
+
+button { font-family: inherit; }
+
+@keyframes aaPulse{0%,100%{opacity:1}50%{opacity:.28}}
+@keyframes aaRing{0%{box-shadow:0 0 0 0 var(--accent-glow)}70%{box-shadow:0 0 0 9px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes aaShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes aaUp{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
+@keyframes aaPop{0%{opacity:0;transform:translateY(12px) scale(.985)}100%{opacity:1;transform:none}}
+@keyframes aaScan{0%{transform:translateY(-30px)}100%{transform:translateY(440px)}}
+@keyframes aaSpin{to{transform:rotate(360deg)}}
+@keyframes aaBreathe{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
+@keyframes aaBar{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
+@keyframes aaDrift{0%{transform:translate(0,0)}50%{transform:translate(14px,-10px)}100%{transform:translate(0,0)}}
+@keyframes aaDrawer{0%{transform:translateX(100%)}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}

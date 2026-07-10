@@ -47,6 +47,20 @@ export async function approveApplication(appId: string): Promise<Application> {
   return data;
 }
 
+/** Deliver a user's CAPTCHA/2FA response to the worker waiting on an intervention. */
+export async function resolveIntervention(appId: string, response: string): Promise<{ resolved: boolean }> {
+  const { data } = await api.post<{ resolved: boolean }>(`/applications/${appId}/intervention`, { response });
+  return data;
+}
+
+/** Approve and enqueue a set of staged applications together. Returns the count approved. */
+export async function bulkApprove(applicationIds: string[]): Promise<{ approved: number }> {
+  const { data } = await api.post<{ approved: number }>('/applications/bulk-approve', {
+    application_ids: applicationIds,
+  });
+  return data;
+}
+
 /** Update an application's status. */
 export async function updateApplicationStatus(
   appId: string,

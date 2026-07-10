@@ -1,14 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
-import Link from '@mui/material/Link';
-import Paper from '@mui/material/Paper';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
+import { Link, useNavigate } from 'react-router-dom';
 
+import { AuthShell, AuthField } from '@/components/auth/AuthShell';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { ApiError } from '@/types/api';
@@ -38,54 +31,17 @@ export default function LoginPage() {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 12 }}>
-      <Paper sx={{ p: 4 }}>
-        <Typography variant="h5" component="h1" gutterBottom>
-          Sign in to AutoApply AI
-        </Typography>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <Box component="form" onSubmit={handleSubmit} noValidate>
-          <TextField
-            label="Email"
-            type="email"
-            fullWidth
-            required
-            margin="normal"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-          <TextField
-            label="Password"
-            type="password"
-            fullWidth
-            required
-            margin="normal"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            disabled={submitting}
-            sx={{ mt: 2 }}
-          >
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </Button>
-        </Box>
-        <Typography variant="body2" sx={{ mt: 2 }}>
-          No account?{' '}
-          <Link component={RouterLink} to="/register">
-            Create one
-          </Link>
-        </Typography>
-      </Paper>
-    </Container>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to your job-search copilot."
+      error={error}
+      onSubmit={handleSubmit}
+      submitting={submitting}
+      submitLabel={submitting ? 'Signing in…' : 'Sign in'}
+      footer={<>No account? <Link to="/register" style={{ color: 'var(--accent)', fontWeight: 700, textDecoration: 'none' }}>Create one</Link></>}
+    >
+      <AuthField id="email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+      <AuthField id="password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+    </AuthShell>
   );
 }
