@@ -14,17 +14,13 @@ export interface PendingIntervention {
 }
 
 interface AppStoreState {
-  /** Whether the sidebar drawer is open (mobile). */
-  sidebarOpen: boolean;
-  /** Active notification for the global snackbar. */
+  /** Active notification for the global toaster. */
   notification: Notification | null;
   /** Whether the backend WebSocket is connected. */
   wsConnected: boolean;
   /** A pending CAPTCHA/2FA intervention the user must resolve, or null. */
   pendingIntervention: PendingIntervention | null;
 
-  toggleSidebar: () => void;
-  setSidebarOpen: (open: boolean) => void;
   showNotification: (message: string, severity?: Notification['severity']) => void;
   clearNotification: () => void;
   setWsConnected: (connected: boolean) => void;
@@ -33,13 +29,9 @@ interface AppStoreState {
 }
 
 export const useAppStore = create<AppStoreState>((set) => ({
-  sidebarOpen: false,
   notification: null,
   wsConnected: false,
   pendingIntervention: null,
-
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   showNotification: (message, severity = 'info') =>
     set({

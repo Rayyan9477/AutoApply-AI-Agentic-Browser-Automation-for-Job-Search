@@ -3,21 +3,37 @@ import { Outlet } from 'react-router-dom';
 
 import Sidebar from './Sidebar';
 import Header from './Header';
+import CommandPalette from '@/components/ui/CommandPalette';
+import InterventionModal from '@/components/applications/InterventionModal';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useApplicationEvents } from '@/hooks/useApplicationEvents';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 
 /** App shell — collapsible sidebar + header + scrollable content, per the design system.
  *  The live WebSocket + application-event wiring (unchanged) drives real-time cache updates. */
 export default function AppLayout() {
   const { connected, lastMessage } = useWebSocket('/ws');
   const setWsConnected = useAppStore((s) => s.setWsConnected);
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
 
   useApplicationEvents(lastMessage);
 
   useEffect(() => {
     setWsConnected(connected);
   }, [connected, setWsConnected]);
+
+  // ⌘K / Ctrl-K opens the command palette from anywhere in the app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setPaletteOpen]);
 
   return (
     <div
@@ -40,6 +56,8 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+      <CommandPalette />
+      <InterventionModal />
     </div>
   );
 }

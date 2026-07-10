@@ -1,7 +1,8 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 import Icon from '@/components/ui/Icon';
 import { useUiStore } from '@/store/useUiStore';
+import { useDashboardStats } from '@/hooks/useAnalytics';
 
 const CRUMB: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -13,9 +14,10 @@ const CRUMB: Record<string, string> = {
 };
 
 export default function Header() {
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
+  const { data: stats } = useDashboardStats();
   const current = CRUMB[pathname] ?? 'AutoApply AI';
 
   return (
@@ -46,8 +48,8 @@ export default function Header() {
       <div style={{ flex: '1 1 auto' }} />
 
       <button
-        onClick={() => navigate('/jobs')}
-        aria-label="Search"
+        onClick={() => setPaletteOpen(true)}
+        aria-label="Open command palette"
         style={{
           flex: '0 1 300px', minWidth: 120, display: 'flex', alignItems: 'center', gap: 9, height: 34,
           padding: '0 10px 0 11px', borderRadius: 'var(--r-md)', background: 'var(--surface-3)',
@@ -63,6 +65,16 @@ export default function Header() {
           <kbd style={{ font: '600 10px/16px var(--mono)', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '0 5px' }}>K</kbd>
         </span>
       </button>
+
+      {stats && (
+        <div
+          title="Month-to-date LLM cost"
+          style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 11px', borderRadius: 'var(--r-md)', background: 'var(--surface-3)', border: '1px solid var(--border)' }}
+        >
+          <span style={{ color: 'var(--accent)', display: 'grid', placeItems: 'center' }}><Icon name="dollar" size={15} /></span>
+          <span style={{ font: '700 12px/1 var(--mono)', color: 'var(--text)' }}>${stats.total_llm_cost_usd.toFixed(2)}</span>
+        </div>
+      )}
 
       <button
         aria-label="Activity"

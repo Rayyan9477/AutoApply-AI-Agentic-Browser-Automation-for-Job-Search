@@ -58,6 +58,14 @@ export function useApproveApplication() {
   });
 }
 
+/** Resolve a pending CAPTCHA/2FA intervention for an application. */
+export function useResolveIntervention() {
+  return useMutation({
+    mutationFn: ({ appId, response }: { appId: string; response: string }) =>
+      appService.resolveIntervention(appId, response),
+  });
+}
+
 /** Approve a set of staged applications together (batch flow). */
 export function useBulkApprove() {
   const queryClient = useQueryClient();

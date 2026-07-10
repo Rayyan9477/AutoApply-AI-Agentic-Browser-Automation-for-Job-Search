@@ -25,7 +25,7 @@ export default function RegisterPage() {
       useAuthStore.setState({ token: access_token });
       const user = await authService.me();
       useAuthStore.getState().setAuth(access_token, user);
-      navigate('/dashboard', { replace: true });
+      navigate('/onboarding', { replace: true });
     } catch (err) {
       setError((err as ApiError).detail ?? 'Registration failed');
     } finally {
