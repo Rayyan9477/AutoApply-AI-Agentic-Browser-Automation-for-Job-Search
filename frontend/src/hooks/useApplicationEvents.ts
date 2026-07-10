@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import type { WSMessage } from '@/hooks/useWebSocket';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore, type PendingIntervention } from '@/store/useAppStore';
 
 /**
  * Reacts to real-time WebSocket events: `application_progress` invalidates the cached
@@ -17,6 +17,8 @@ export function useApplicationEvents(lastMessage: WSMessage | null): void {
     if (lastMessage.type === 'application_progress') {
       void queryClient.invalidateQueries({ queryKey: ['applications'] });
     } else if (lastMessage.type === 'intervention_required') {
+      const iv = lastMessage.payload as unknown as PendingIntervention;
+      useAppStore.getState().setIntervention(iv);
       useAppStore
         .getState()
         .showNotification('A job application needs your input (CAPTCHA/2FA).', 'warning');

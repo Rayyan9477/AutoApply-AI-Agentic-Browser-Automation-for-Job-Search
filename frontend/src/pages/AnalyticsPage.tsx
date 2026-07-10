@@ -1,210 +1,110 @@
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
+import Icon, { type IconName } from '@/components/ui/Icon';
+import { useApplicationFunnel, useATSDistribution, useLLMUsage, useTimeline } from '@/hooks/useAnalytics';
 
-import ApplicationFunnel from '@/components/dashboard/ApplicationFunnel';
-import LoadingState from '@/components/common/LoadingState';
-import ErrorBoundary from '@/components/common/ErrorBoundary';
-import {
-  useApplicationFunnel,
-  useATSDistribution,
-  useLLMUsage,
-  useTimeline,
-} from '@/hooks/useAnalytics';
+const card: React.CSSProperties = {
+  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-1)', padding: 18,
+};
 
-function AnalyticsPage() {
-  const { data: funnel, isLoading: funnelLoading } = useApplicationFunnel();
-  const { data: atsDistribution, isLoading: atsLoading } = useATSDistribution();
-  const { data: llmUsage, isLoading: llmLoading } = useLLMUsage();
-  const { data: timeline, isLoading: timelineLoading } = useTimeline();
+export default function AnalyticsPage() {
+  const funnel = useApplicationFunnel();
+  const ats = useATSDistribution();
+  const llm = useLLMUsage();
+  const timeline = useTimeline();
 
-  const isLoading = funnelLoading || atsLoading || llmLoading || timelineLoading;
-
-  if (isLoading) {
-    return <LoadingState message="Loading analytics..." />;
-  }
+  const funnelData = funnel.data ?? [];
+  const atsData = ats.data ?? [];
+  const llmData = llm.data ?? [];
+  const days = timeline.data ?? [];
+  const funnelMax = Math.max(1, ...funnelData.map((f) => f.count));
+  const atsMax = Math.max(1, ...atsData.map((b) => b.count));
+  const dayMax = Math.max(1, ...days.map((d) => d.applications_applied ?? 0));
 
   return (
-    <ErrorBoundary>
-      <Box>
-        <Typography variant="h4" gutterBottom>
-          Analytics
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Detailed insights into your job search performance
-        </Typography>
+    <div style={{ animation: 'aaUp .4s var(--ease) both' }}>
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ margin: 0, font: '800 24px/1.1 var(--font)', letterSpacing: '-.03em' }}>Insights</h1>
+        <p style={{ margin: '6px 0 0', font: '500 13px/1.4 var(--font)', color: 'var(--text-3)' }}>How your search is converting — funnel, match quality, activity, and AI spend.</p>
+      </div>
 
-        <Grid container spacing={3}>
-          {/* Activity Timeline */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Activity Timeline
-                </Typography>
-                {timeline && timeline.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={timeline} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 8,
-                          border: '1px solid #e0e0e0',
-                        }}
-                      />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="jobs_found"
-                        stroke="#1976d2"
-                        strokeWidth={2}
-                        name="Jobs Found"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="applications_created"
-                        stroke="#00897b"
-                        strokeWidth={2}
-                        name="Apps Created"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="applications_applied"
-                        stroke="#ed6c02"
-                        strokeWidth={2}
-                        name="Apps Applied"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography color="text.secondary">
-                      No timeline data available yet. Start applying to see activity trends.
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16 }}>
+        {/* Funnel */}
+        <Panel icon="filter" title="Application funnel">
+          {funnelData.length === 0 ? <Empty /> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {funnelData.map((f) => (
+                <div key={f.stage} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ width: 110, flex: '0 0 auto', font: '600 12px/1.2 var(--font)', color: 'var(--text-2)' }}>{f.stage}</span>
+                  <div style={{ flex: '1 1 auto', height: 10, borderRadius: 5, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${(f.count / funnelMax) * 100}%`, background: 'var(--accent)', borderRadius: 5, transition: 'width .5s var(--ease)' }} />
+                  </div>
+                  <span style={{ width: 34, textAlign: 'right', font: '700 12px/1 var(--mono)', color: 'var(--text)' }}>{f.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
 
-          {/* Application Funnel */}
-          <Grid item xs={12} md={6}>
-            <ApplicationFunnel data={funnel} />
-          </Grid>
+        {/* ATS distribution */}
+        <Panel icon="gauge" title="ATS score distribution">
+          {atsData.length === 0 ? <Empty /> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {atsData.map((b) => (
+                <div key={b.range_label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ width: 70, flex: '0 0 auto', font: '600 11.5px/1.2 var(--mono)', color: 'var(--text-2)' }}>{b.range_label}</span>
+                  <div style={{ flex: '1 1 auto', height: 10, borderRadius: 5, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${(b.count / atsMax) * 100}%`, background: 'var(--applied)', borderRadius: 5 }} />
+                  </div>
+                  <span style={{ width: 34, textAlign: 'right', font: '700 12px/1 var(--mono)', color: 'var(--text)' }}>{b.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
 
-          {/* ATS Score Distribution */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  ATS Score Distribution
-                </Typography>
-                {atsDistribution && atsDistribution.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={atsDistribution}
-                      margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="range_label" tick={{ fontSize: 11 }} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 8,
-                          border: '1px solid #e0e0e0',
-                        }}
-                      />
-                      <Bar dataKey="count" fill="#00897b" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography color="text.secondary">
-                      No ATS score data available yet.
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
+        {/* Activity timeline */}
+        <Panel icon="activity" title="Activity (applied / day)">
+          {days.length === 0 ? <Empty /> : (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 90 }}>
+              {days.map((d) => (
+                <div key={d.date} title={`${d.date}: ${d.applications_applied ?? 0}`} style={{ flex: '1 1 auto', minWidth: 3, height: `${((d.applications_applied ?? 0) / dayMax) * 100}%`, background: 'var(--accent)', borderRadius: 2, opacity: 0.85 }} />
+              ))}
+            </div>
+          )}
+        </Panel>
 
-          {/* LLM Usage Table */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  LLM Usage & Costs
-                </Typography>
-                {llmUsage && llmUsage.length > 0 ? (
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Provider</TableCell>
-                          <TableCell>Model</TableCell>
-                          <TableCell align="right">Requests</TableCell>
-                          <TableCell align="right">Tokens</TableCell>
-                          <TableCell align="right">Cost (USD)</TableCell>
-                          <TableCell align="right">Avg Latency (ms)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {llmUsage.map((row) => (
-                          <TableRow key={`${row.provider}-${row.model}`}>
-                            <TableCell>
-                              {row.provider.charAt(0).toUpperCase() + row.provider.slice(1)}
-                            </TableCell>
-                            <TableCell>{row.model}</TableCell>
-                            <TableCell align="right">
-                              {row.total_requests.toLocaleString()}
-                            </TableCell>
-                            <TableCell align="right">
-                              {row.total_tokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell align="right">${row.total_cost_usd.toFixed(4)}</TableCell>
-                            <TableCell align="right">{row.avg_latency_ms.toFixed(0)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography color="text.secondary">
-                      No LLM usage data yet. Usage will appear after generating resumes or
-                      analyzing jobs.
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
-    </ErrorBoundary>
+        {/* LLM usage */}
+        <Panel icon="cpu" title="AI usage & spend">
+          {llmData.length === 0 ? <Empty /> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {llmData.map((u) => (
+                <div key={`${u.provider}-${u.model}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                  <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <span style={{ display: 'block', font: '700 12.5px/1.2 var(--font)', textTransform: 'capitalize' }}>{u.provider}</span>
+                    <span style={{ display: 'block', font: '500 10.5px/1.2 var(--mono)', color: 'var(--text-3)', marginTop: 2 }}>{u.model} · {u.total_tokens.toLocaleString()} tok</span>
+                  </span>
+                  <span style={{ font: '700 12.5px/1 var(--mono)', color: 'var(--accent)' }}>${u.total_cost_usd.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+    </div>
   );
 }
 
-export default AnalyticsPage;
+function Panel({ icon, title, children }: { icon: IconName; title: string; children: React.ReactNode }) {
+  return (
+    <section style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <span style={{ display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--accent)' }}><Icon name={icon} size={15} /></span>
+        <span style={{ font: '700 13.5px/1 var(--font)', letterSpacing: '-.01em' }}>{title}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Empty() {
+  return <p style={{ margin: 0, font: '500 12px/1.4 var(--font)', color: 'var(--text-4)' }}>No data yet.</p>;
+}
