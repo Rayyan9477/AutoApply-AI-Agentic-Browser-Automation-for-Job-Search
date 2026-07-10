@@ -1,6 +1,4 @@
 import { useEffect, type ReactNode } from 'react';
-import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
 
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -37,16 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (status === 'loading') {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
+        <div
+          aria-label="Loading"
+          style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--surface-2)', borderTopColor: 'var(--accent)', animation: 'aaSpin .8s linear infinite' }}
+        />
+      </div>
     );
   }
 

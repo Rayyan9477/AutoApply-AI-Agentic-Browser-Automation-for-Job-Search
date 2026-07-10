@@ -1,9 +1,7 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+
+import Icon from '@/components/ui/Icon';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -17,9 +15,8 @@ interface ErrorBoundaryState {
 }
 
 /**
- * React error boundary that catches rendering errors and displays
- * a recovery UI. This is the one class component in the project,
- * required by the React error boundary API.
+ * React error boundary that catches rendering errors and displays a recovery UI.
+ * The one class component in the project, required by the React error boundary API.
  */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -46,28 +43,21 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       }
 
       return (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 300,
-            gap: 2,
-            p: 4,
-          }}
-        >
-          <ErrorOutlineIcon color="error" sx={{ fontSize: 48 }} />
-          <Typography variant="h6" color="error">
-            Something went wrong
-          </Typography>
-          <Typography variant="body2" color="text.secondary" textAlign="center">
+        <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32, background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)' }}>
+          <div style={{ display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: 14, background: 'var(--rejected-soft)', color: 'var(--rejected)' }}>
+            <Icon name="alert" size={26} />
+          </div>
+          <div style={{ font: '700 16px/1.2 var(--font)' }}>Something went wrong</div>
+          <div style={{ font: '500 12.5px/1.4 var(--font)', color: 'var(--text-3)', textAlign: 'center', maxWidth: 380 }}>
             {this.state.error?.message ?? 'An unexpected error occurred.'}
-          </Typography>
-          <Button variant="outlined" onClick={this.handleReset}>
+          </div>
+          <button
+            onClick={this.handleReset}
+            style={{ height: 36, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)', font: '700 12.5px/1 var(--font)', cursor: 'pointer' }}
+          >
             Try Again
-          </Button>
-        </Box>
+          </button>
+        </div>
       );
     }
 

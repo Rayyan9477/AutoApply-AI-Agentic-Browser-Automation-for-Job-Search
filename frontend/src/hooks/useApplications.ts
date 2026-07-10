@@ -58,6 +58,17 @@ export function useApproveApplication() {
   });
 }
 
+/** Approve a set of staged applications together (batch flow). */
+export function useBulkApprove() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => appService.bulkApprove(ids),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: APPS_KEY });
+    },
+  });
+}
+
 /** Update an application's status. */
 export function useUpdateApplicationStatus() {
   const queryClient = useQueryClient();

@@ -1,87 +1,78 @@
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import IconButton from '@mui/material/IconButton';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import Tooltip from '@mui/material/Tooltip';
-import MenuIcon from '@mui/icons-material/Menu';
-import CircleIcon from '@mui/icons-material/Circle';
-import LogoutIcon from '@mui/icons-material/Logout';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-import { useAppStore } from '@/store/useAppStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { DRAWER_WIDTH } from './Sidebar';
+import Icon from '@/components/ui/Icon';
+import { useUiStore } from '@/store/useUiStore';
 
-function Header() {
+const CRUMB: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/jobs': 'Jobs',
+  '/applications': 'Applications',
+  '/resumes': 'Résumés',
+  '/analytics': 'Insights',
+  '/settings': 'Settings',
+};
+
+export default function Header() {
   const navigate = useNavigate();
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
-  const wsConnected = useAppStore((s) => s.wsConnected);
-  const userEmail = useAuthStore((s) => s.user?.email);
-  const clearAuth = useAuthStore((s) => s.clear);
-
-  const handleLogout = () => {
-    clearAuth();
-    navigate('/login', { replace: true });
-  };
+  const { pathname } = useLocation();
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const current = CRUMB[pathname] ?? 'AutoApply AI';
 
   return (
-    <AppBar
-      position="fixed"
-      color="inherit"
-      elevation={0}
-      sx={{
-        width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-        ml: { md: `${DRAWER_WIDTH}px` },
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
+    <header
+      style={{
+        flex: '0 0 auto', height: 60, display: 'flex', alignItems: 'center', gap: 14, padding: '0 20px',
+        borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb,var(--bg) 82%,transparent)',
+        backdropFilter: 'blur(10px)', position: 'relative', zIndex: 15,
       }}
     >
-      <Toolbar>
-        <IconButton
-          edge="start"
-          onClick={toggleSidebar}
-          sx={{ mr: 2, display: { md: 'none' } }}
-          aria-label="Open navigation menu"
-        >
-          <MenuIcon />
-        </IconButton>
+      <button
+        onClick={toggleSidebar}
+        aria-label="Toggle sidebar"
+        style={{
+          flex: '0 0 auto', width: 32, height: 32, borderRadius: 'var(--r-md)', background: 'transparent',
+          border: '1px solid transparent', color: 'var(--text-3)', cursor: 'pointer', display: 'grid', placeItems: 'center',
+        }}
+      >
+        <Icon name="panel" size={18} />
+      </button>
 
-        <Typography variant="h6" noWrap sx={{ flexGrow: 1 }} color="text.primary">
-          {/* Page title managed by individual pages */}
-        </Typography>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
+        <span style={{ font: '600 12.5px/1 var(--font)', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Workspace</span>
+        <span style={{ color: 'var(--text-4)', display: 'grid', placeItems: 'center' }}><Icon name="chevR" size={13} /></span>
+        <span style={{ font: '700 14px/1 var(--font)', color: 'var(--text)', whiteSpace: 'nowrap', letterSpacing: '-.015em' }}>{current}</span>
+      </div>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Chip
-            icon={
-              <CircleIcon
-                sx={{
-                  fontSize: 10,
-                  color: wsConnected ? 'success.main' : 'error.main',
-                }}
-              />
-            }
-            label={wsConnected ? 'Connected' : 'Disconnected'}
-            variant="outlined"
-            size="small"
-            sx={{ fontWeight: 500 }}
-          />
-          {userEmail && (
-            <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              {userEmail}
-            </Typography>
-          )}
-          <Tooltip title="Sign out">
-            <IconButton onClick={handleLogout} aria-label="Sign out" size="small">
-              <LogoutIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Toolbar>
-    </AppBar>
+      <div style={{ flex: '1 1 auto' }} />
+
+      <button
+        onClick={() => navigate('/jobs')}
+        aria-label="Search"
+        style={{
+          flex: '0 1 300px', minWidth: 120, display: 'flex', alignItems: 'center', gap: 9, height: 34,
+          padding: '0 10px 0 11px', borderRadius: 'var(--r-md)', background: 'var(--surface-3)',
+          border: '1px solid var(--border)', color: 'var(--text-3)', cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ flex: '0 0 auto', display: 'grid', placeItems: 'center' }}><Icon name="search" size={16} /></span>
+        <span style={{ flex: '1 1 auto', font: '500 12.5px/1 var(--font)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          Search jobs, applications, résumés…
+        </span>
+        <span style={{ flex: '0 0 auto', display: 'flex', gap: 2 }}>
+          <kbd style={{ font: '600 10px/16px var(--mono)', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '0 4px', minWidth: 16, textAlign: 'center' }}>⌘</kbd>
+          <kbd style={{ font: '600 10px/16px var(--mono)', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '0 5px' }}>K</kbd>
+        </span>
+      </button>
+
+      <button
+        aria-label="Activity"
+        style={{
+          flex: '0 0 auto', width: 34, height: 34, borderRadius: 'var(--r-md)', background: 'var(--surface-3)',
+          border: '1px solid var(--border)', color: 'var(--text-2)', cursor: 'pointer', display: 'grid', placeItems: 'center',
+        }}
+      >
+        <Icon name="bell" size={17} />
+      </button>
+    </header>
   );
 }
-
-export default Header;
