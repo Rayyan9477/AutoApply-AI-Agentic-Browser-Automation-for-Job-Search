@@ -42,6 +42,9 @@ export default function LoginPage() {
     >
       <AuthField id="email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
       <AuthField id="password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+      <div style={{ textAlign: 'right', margin: '-4px 0 10px' }}>
+        <Link to="/forgot-password" style={{ font: '600 12px/1 var(--font)', color: 'var(--accent)', textDecoration: 'none' }}>Forgot password?</Link>
+      </div>
     </AuthShell>
   );
 }

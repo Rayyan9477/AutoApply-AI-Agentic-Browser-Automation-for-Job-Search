@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useResumes, useUploadResume, useOptimizeResume } from '@/hooks/useResumes';
 import { useAppStore } from '@/store/useAppStore';
-import { atsColor, relativeTime } from '@/lib/status';
+import { atsColor, atsPercent, relativeTime } from '@/lib/status';
 import type { Resume } from '@/types/resume';
 
 const card: React.CSSProperties = {
@@ -92,7 +92,7 @@ function ResumeCard({ resume, onOptimize, optimizing }: { resume: Resume; onOpti
         <span style={{ display: 'grid', placeItems: 'center', width: 34, height: 34, borderRadius: 9, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}><Icon name="file" size={17} /></span>
         {resume.ats_score != null && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span style={{ font: '800 17px/1 var(--mono)', color: atsColor(Math.round(resume.ats_score)) }}>{Math.round(resume.ats_score)}</span>
+            <span style={{ font: '800 17px/1 var(--mono)', color: atsColor(atsPercent(resume.ats_score)) }}>{atsPercent(resume.ats_score)}</span>
             <span style={{ font: '600 8px/1 var(--mono)', letterSpacing: '.1em', color: 'var(--text-4)' }}>ATS</span>
           </div>
         )}

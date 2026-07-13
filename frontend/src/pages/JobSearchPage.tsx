@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Icon from '@/components/ui/Icon';
+import JobDrawer from '@/components/jobs/JobDrawer';
 import { useJobs, useSearchJobs, useAnalyzeJob } from '@/hooks/useJobs';
 import { useCreateApplication } from '@/hooks/useApplications';
+import { useResumes, useGenerateResume } from '@/hooks/useResumes';
 import { useAppStore } from '@/store/useAppStore';
 import { atsColor, relativeTime } from '@/lib/status';
-import type { Job } from '@/types/job';
+import type { Job, JobAnalysisResponse } from '@/types/job';
 
 const card: React.CSSProperties = {
   background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-1)',
@@ -26,11 +28,38 @@ export default function JobSearchPage() {
   const [location, setLocation] = useState('');
   const [platforms, setPlatforms] = useState<Set<string>>(new Set(PLATFORMS.map((p) => p.key)));
   const { data, isLoading, isError } = useJobs(1, 30);
+  const { data: resumeData } = useResumes();
   const search = useSearchJobs();
   const analyze = useAnalyzeJob();
   const createApp = useCreateApplication();
+  const generate = useGenerateResume();
+
+  const [drawerJob, setDrawerJob] = useState<Job | null>(null);
+  const [analysis, setAnalysis] = useState<JobAnalysisResponse | null>(null);
 
   const jobs = data?.items ?? [];
+  const resumes = resumeData?.items ?? [];
+  const baseResumeId = resumes.find((r) => r.type === 'base')?.id ?? resumes[0]?.id ?? null;
+
+  const openDrawer = (job: Job) => {
+    setDrawerJob(job);
+    setAnalysis(null);
+    analyze.mutate(job.id, {
+      onSuccess: (r) => setAnalysis(r),
+      onError: () => notify('Could not analyze this job', 'error'),
+    });
+  };
+
+  const onGenerateTailored = () => {
+    if (!drawerJob || !baseResumeId) return;
+    generate.mutate(
+      { base_resume_id: baseResumeId, job_id: drawerJob.id },
+      {
+        onSuccess: () => notify(`Tailored résumé generated · ${drawerJob.title}`, 'success'),
+        onError: () => notify('Could not generate the résumé', 'error'),
+      },
+    );
+  };
 
   const togglePlatform = (key: string) =>
     setPlatforms((prev) => {
@@ -142,9 +171,21 @@ export default function JobSearchPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 14 }}>
           {jobs.map((j) => (
-            <JobCardView key={j.id} job={j} onAnalyze={() => onAnalyze(j)} onApply={() => onApply(j)} analyzing={analyze.isPending} applying={createApp.isPending} />
+            <JobCardView key={j.id} job={j} onOpen={() => openDrawer(j)} onAnalyze={() => onAnalyze(j)} onApply={() => onApply(j)} analyzing={analyze.isPending} applying={createApp.isPending} />
           ))}
         </div>
+      )}
+
+      {drawerJob && (
+        <JobDrawer
+          job={drawerJob}
+          analysis={analysis}
+          analyzing={analyze.isPending}
+          baseResumeId={baseResumeId}
+          generating={generate.isPending}
+          onClose={() => setDrawerJob(null)}
+          onGenerate={onGenerateTailored}
+        />
       )}
     </div>
   );
@@ -170,7 +211,7 @@ function ScoreRing({ score }: { score: number | null }) {
   );
 }
 
-function JobCardView({ job, onAnalyze, onApply, analyzing, applying }: { job: Job; onAnalyze: () => void; onApply: () => void; analyzing: boolean; applying: boolean }) {
+function JobCardView({ job, onOpen, onAnalyze, onApply, analyzing, applying }: { job: Job; onOpen: () => void; onAnalyze: () => void; onApply: () => void; analyzing: boolean; applying: boolean }) {
   const plat = PLATFORMS.find((p) => p.key === job.platform);
   return (
     <div style={{ ...card, padding: 15, display: 'flex', flexDirection: 'column', gap: 11 }}>
@@ -181,7 +222,7 @@ function JobCardView({ job, onAnalyze, onApply, analyzing, applying }: { job: Jo
         </span>
       </div>
       <div>
-        <div style={{ font: '700 14px/1.3 var(--font)', color: 'var(--text)' }}>{job.title}</div>
+        <button onClick={onOpen} style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0, margin: 0, background: 'none', border: 0, cursor: 'pointer', font: '700 14px/1.3 var(--font)', color: 'var(--text)' }}>{job.title}</button>
         <div style={{ font: '500 12px/1.3 var(--font)', color: 'var(--text-3)', marginTop: 3 }}>{job.company} · {job.location || (job.remote ? 'Remote' : '—')}</div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

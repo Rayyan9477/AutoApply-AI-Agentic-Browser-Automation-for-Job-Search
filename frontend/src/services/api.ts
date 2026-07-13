@@ -29,11 +29,13 @@ type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 const isAuthEntry = (url: string): boolean =>
   /\/auth\/(login|register|refresh)/.test(url);
 
-// Single-flight refresh: concurrent 401s share ONE `/auth/refresh` call so we don't stampede
-// the endpoint or mint several tokens. Reset once it settles.
+// Single-flight refresh: concurrent 401s (and concurrent boot refreshes — React StrictMode's
+// dev double-invoke, or several tabs) share ONE `/auth/refresh` call so we don't stampede the
+// endpoint. This matters because the backend rotates the refresh token and revokes the whole
+// family if the same cookie is presented twice. Reset once it settles.
 let refreshPromise: Promise<string> | null = null;
 
-function refreshAccessToken(): Promise<string> {
+export function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = api
       .post<{ access_token: string }>('/auth/refresh')
