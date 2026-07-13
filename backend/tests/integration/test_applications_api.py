@@ -148,6 +148,18 @@ class TestGetApplication:
         assert body["id"] == sample_application.id
         assert body["status"] == "queued"
 
+    async def test_get_application_includes_job_title_and_company(
+        self, client, sample_application
+    ):
+        # The detail endpoint must hydrate job_title/company from the related job, exactly
+        # like the list endpoint — otherwise the app-detail screen shows "Untitled role".
+        response = await client.get(f"{API_PREFIX}/{sample_application.id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["job_title"] == "Senior Python Developer"
+        assert body["company"] == "TechCorp Inc."
+
 
 class TestApproveApplication:
     """Tests for PUT /api/v1/applications/{app_id}/approve."""

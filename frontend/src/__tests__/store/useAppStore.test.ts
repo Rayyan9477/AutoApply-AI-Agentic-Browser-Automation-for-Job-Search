@@ -3,55 +3,19 @@ import { useAppStore } from '@/store/useAppStore';
 
 describe('useAppStore', () => {
   beforeEach(() => {
-    // Reset to initial state before each test.
-    useAppStore.setState({
-      sidebarOpen: false,
-      notification: null,
-      wsConnected: false,
-    });
+    useAppStore.setState({ notification: null, wsConnected: false, pendingIntervention: null });
   });
 
   it('has correct initial state', () => {
     const state = useAppStore.getState();
-    expect(state.sidebarOpen).toBe(false);
     expect(state.notification).toBeNull();
     expect(state.wsConnected).toBe(false);
-  });
-
-  // --- Sidebar ---
-
-  it('toggleSidebar flips sidebarOpen from false to true', () => {
-    useAppStore.getState().toggleSidebar();
-    expect(useAppStore.getState().sidebarOpen).toBe(true);
-  });
-
-  it('toggleSidebar flips sidebarOpen from true to false', () => {
-    useAppStore.setState({ sidebarOpen: true });
-    useAppStore.getState().toggleSidebar();
-    expect(useAppStore.getState().sidebarOpen).toBe(false);
-  });
-
-  it('double toggle returns to original state', () => {
-    useAppStore.getState().toggleSidebar();
-    useAppStore.getState().toggleSidebar();
-    expect(useAppStore.getState().sidebarOpen).toBe(false);
-  });
-
-  it('setSidebarOpen sets sidebar to true', () => {
-    useAppStore.getState().setSidebarOpen(true);
-    expect(useAppStore.getState().sidebarOpen).toBe(true);
-  });
-
-  it('setSidebarOpen sets sidebar to false', () => {
-    useAppStore.setState({ sidebarOpen: true });
-    useAppStore.getState().setSidebarOpen(false);
-    expect(useAppStore.getState().sidebarOpen).toBe(false);
+    expect(state.pendingIntervention).toBeNull();
   });
 
   // --- Notifications ---
 
   it('showNotification creates notification with default severity "info"', () => {
-    // Stub crypto.randomUUID for predictable id.
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid-1' });
 
     useAppStore.getState().showNotification('Test message');
@@ -131,26 +95,26 @@ describe('useAppStore', () => {
     expect(useAppStore.getState().wsConnected).toBe(false);
   });
 
+  // --- Interventions ---
+
+  it('setIntervention stores the pending intervention', () => {
+    useAppStore.getState().setIntervention({ application_id: 'app-1', kind: 'captcha', prompt: 'Solve it' });
+    expect(useAppStore.getState().pendingIntervention?.application_id).toBe('app-1');
+  });
+
+  it('clearIntervention resets the pending intervention to null', () => {
+    useAppStore.getState().setIntervention({ application_id: 'app-1', kind: 'captcha', prompt: 'Solve it' });
+    useAppStore.getState().clearIntervention();
+    expect(useAppStore.getState().pendingIntervention).toBeNull();
+  });
+
   // --- Cross-state independence ---
 
   it('notification changes do not affect other state', () => {
-    useAppStore.setState({ sidebarOpen: true, wsConnected: true });
+    useAppStore.setState({ wsConnected: true });
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' });
 
     useAppStore.getState().showNotification('Hello');
-    expect(useAppStore.getState().sidebarOpen).toBe(true);
-    expect(useAppStore.getState().wsConnected).toBe(true);
-
-    vi.unstubAllGlobals();
-  });
-
-  it('sidebar changes do not affect other state', () => {
-    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' });
-    useAppStore.getState().showNotification('Existing');
-    useAppStore.getState().setWsConnected(true);
-
-    useAppStore.getState().toggleSidebar();
-    expect(useAppStore.getState().notification?.message).toBe('Existing');
     expect(useAppStore.getState().wsConnected).toBe(true);
 
     vi.unstubAllGlobals();
