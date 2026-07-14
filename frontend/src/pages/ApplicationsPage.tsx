@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/Icon';
 import { useApplications, useBulkApprove } from '@/hooks/useApplications';
 import { useAppStore } from '@/store/useAppStore';
-import { statusMeta, atsColor, isApprovable, relativeTime } from '@/lib/status';
+import { statusMeta, atsColor, atsPercent, isApprovable, relativeTime } from '@/lib/status';
 import type { Application } from '@/types/application';
 
 const card: React.CSSProperties = {
@@ -161,7 +161,7 @@ function Row({ app, selected, onToggle, onOpen }: { app: Application; selected: 
         </span>
       </td>
       <td style={{ padding: '0 16px', textAlign: 'center' }}>
-        <span style={{ font: '700 12.5px/1 var(--mono)', color: app.ats_score != null ? atsColor(app.ats_score) : 'var(--text-4)' }}>{app.ats_score != null ? Math.round(app.ats_score) : '—'}</span>
+        <span style={{ font: '700 12.5px/1 var(--mono)', color: app.ats_score != null ? atsColor(atsPercent(app.ats_score)) : 'var(--text-4)' }}>{app.ats_score != null ? atsPercent(app.ats_score) : '—'}</span>
       </td>
       <td style={{ padding: '0 16px' }}>
         <span style={{ font: '500 11.5px/1 var(--mono)', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{relativeTime(app.applied_at ?? app.created_at)}</span>

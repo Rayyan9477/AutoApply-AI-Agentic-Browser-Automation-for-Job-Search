@@ -5,7 +5,7 @@ import { useDashboardStats } from '@/hooks/useAnalytics';
 import { useApplications, useApproveApplication } from '@/hooks/useApplications';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { statusMeta, atsColor, isApprovable, relativeTime } from '@/lib/status';
+import { statusMeta, atsColor, atsPercent, isApprovable, relativeTime } from '@/lib/status';
 import type { Application } from '@/types/application';
 
 function greeting(): string {
@@ -47,7 +47,7 @@ export default function DashboardPage() {
     { label: 'Applied', value: fmt(stats?.applications_applied), icon: 'check', color: 'var(--applied)' },
     { label: 'Interviews', value: fmt(stats?.applications_interview), icon: 'activity', color: 'var(--interview)' },
     { label: 'Offers', value: fmt(stats?.applications_offer), icon: 'target', color: 'var(--offer)' },
-    { label: 'Avg ATS', value: stats ? String(Math.round(stats.avg_ats_score)) : '—', icon: 'gauge', color: 'var(--accent)' },
+    { label: 'Avg ATS', value: stats ? String(atsPercent(stats.avg_ats_score)) : '—', icon: 'gauge', color: 'var(--accent)' },
     { label: 'LLM cost', value: stats ? `$${(stats.total_llm_cost_usd ?? 0).toFixed(2)}` : '—', icon: 'dollar', color: 'var(--accent)' },
   ];
 
@@ -102,7 +102,7 @@ export default function DashboardPage() {
           </div>
           {live.ats_score != null && (
             <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ font: '800 20px/1 var(--mono)', color: atsColor(Math.round(live.ats_score)) }}>{Math.round(live.ats_score)}</span>
+              <span style={{ font: '800 20px/1 var(--mono)', color: atsColor(atsPercent(live.ats_score)) }}>{atsPercent(live.ats_score)}</span>
               <span style={{ font: '600 8px/1 var(--mono)', letterSpacing: '.1em', color: 'var(--text-4)' }}>ATS</span>
             </div>
           )}
@@ -192,8 +192,8 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td style={{ padding: '0 16px', textAlign: 'center' }}>
-                        <span style={{ font: '700 12.5px/1 var(--mono)', color: a.ats_score != null ? atsColor(a.ats_score) : 'var(--text-4)' }}>
-                          {a.ats_score != null ? Math.round(a.ats_score) : '—'}
+                        <span style={{ font: '700 12.5px/1 var(--mono)', color: a.ats_score != null ? atsColor(atsPercent(a.ats_score)) : 'var(--text-4)' }}>
+                          {a.ats_score != null ? atsPercent(a.ats_score) : '—'}
                         </span>
                       </td>
                       <td style={{ padding: '0 16px' }}>

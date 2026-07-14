@@ -31,7 +31,16 @@ export function isApprovable(status: string): boolean {
   return status === 'pending_review' || status === 'queued';
 }
 
-/** ATS-score color band (offer / applied / review / rejected). */
+/**
+ * Scale a 0–1 ATS/match score (as the API returns it) to a 0–100 integer for display.
+ * Use this everywhere a score is shown or passed to {@link atsColor} — the raw 0–1 value
+ * would otherwise render as "0"/"1" and always land in the rejected color band.
+ */
+export function atsPercent(score: number | null | undefined): number {
+  return Math.round((score ?? 0) * 100);
+}
+
+/** ATS-score color band (offer / applied / review / rejected). Expects a 0–100 value. */
 export function atsColor(score: number): string {
   if (score >= 85) return 'var(--offer)';
   if (score >= 75) return 'var(--applied)';

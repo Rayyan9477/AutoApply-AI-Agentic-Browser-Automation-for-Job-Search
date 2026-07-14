@@ -51,3 +51,30 @@ export function getDownloadUrl(resumeId: string, format: 'pdf' | 'docx' = 'pdf')
   const baseURL = api.defaults.baseURL ?? '/api/v1';
   return `${baseURL}/resumes/${resumeId}/download?format=${format}`;
 }
+
+/**
+ * Download a resume file. The endpoint streams a bearer-gated FileResponse, so a plain link
+ * can't authenticate — fetch it through the api client (which attaches the token) as a blob
+ * and hand it to the browser via a transient object URL.
+ */
+export async function downloadResumeFile(
+  resumeId: string,
+  format: 'pdf' | 'docx',
+  name: string,
+): Promise<void> {
+  const { data } = await api.get<Blob>(`/resumes/${resumeId}/download`, {
+    params: { format },
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(data);
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
