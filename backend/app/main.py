@@ -1,7 +1,7 @@
 """FastAPI application factory and lifespan management."""
 
 import hmac
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import structlog
@@ -86,6 +86,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    from app.observability.sentry import init_sentry
+
+    init_sentry("api")  # no-op unless SENTRY_DSN is set
+
     app = FastAPI(
         title=APP_TITLE,
         version=APP_VERSION,
@@ -93,6 +97,21 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.environment != Environment.PRODUCTION else None,
         redoc_url="/redoc" if settings.environment != Environment.PRODUCTION else None,
     )
+
+    # Security headers (defense-in-depth, independent of the reverse proxy).
+    @app.middleware("http")
+    async def security_headers(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if settings.environment == Environment.PRODUCTION:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+            )
+        return response
 
     # CORS
     app.add_middleware(
@@ -147,9 +166,35 @@ def create_app() -> FastAPI:
     app.include_router(ws_router)
 
     @app.get("/health")
-    async def health_check() -> dict[str, str]:
-        """Health check endpoint."""
-        return {"status": "ok", "version": APP_VERSION}
+    async def health_check(response: Response) -> dict[str, object]:
+        """Readiness probe: verifies DB connectivity (hard) and reports Redis (soft).
+
+        A dead database means the instance cannot serve, so it returns 503 — which lets a
+        container healthcheck / uptime monitor detect it. Redis degrades gracefully (WS + queue
+        only), so it is reported but does not fail the check.
+        """
+        from sqlalchemy import text
+
+        from app.db.redis import is_redis_available
+        from app.db.session import engine
+
+        db_ok = True
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except Exception as exc:
+            db_ok = False
+            logger.error("health_db_unavailable", error=str(exc))
+        redis_ok = await is_redis_available()
+
+        if not db_ok:
+            response.status_code = 503
+        return {
+            "status": "ok" if db_ok else "unavailable",
+            "version": APP_VERSION,
+            "db": db_ok,
+            "redis": redis_ok,
+        }
 
     return app
 

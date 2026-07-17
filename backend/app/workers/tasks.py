@@ -329,6 +329,9 @@ async def purge_deleted_accounts(ctx: dict[str, Any]) -> None:
 
 
 async def _on_startup(ctx: dict[str, Any]) -> None:
+    from app.observability.sentry import init_sentry
+
+    init_sentry("worker")  # no-op unless SENTRY_DSN is set
     logger.info("worker.startup")
 
 

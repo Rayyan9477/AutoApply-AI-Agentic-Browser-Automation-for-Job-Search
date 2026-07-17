@@ -11,6 +11,7 @@ from starlette.background import BackgroundTask
 
 from app.api.deps import CurrentUser, get_tenant_db
 from app.core.exceptions import RecordNotFoundError
+from app.core.ratelimit import rate_limit
 from app.core.storage import StorageService, get_storage
 from app.schemas.resume import (
     ResumeGenerateRequest,
@@ -26,6 +27,9 @@ from app.services import resume as resume_service
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+
+# Per-client rate cap on the costly LLM/CPU-backed endpoints (BYO-key cost + DoS guard).
+_COSTLY = Depends(rate_limit(30, 60))
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
@@ -90,6 +94,7 @@ async def list_resumes(
     "/generate",
     response_model=ResumeResponse,
     status_code=201,
+    dependencies=[_COSTLY],
     summary="Generate a tailored resume",
 )
 async def generate_resume(
@@ -108,6 +113,7 @@ async def generate_resume(
 @router.post(
     "/{resume_id}/score",
     response_model=ResumeScoreResponse,
+    dependencies=[_COSTLY],
     summary="Score resume against a job",
 )
 async def score_resume(
@@ -122,6 +128,7 @@ async def score_resume(
 @router.post(
     "/{resume_id}/optimize",
     response_model=ResumeResponse,
+    dependencies=[_COSTLY],
     summary="Optimize resume for ATS",
 )
 async def optimize_resume(

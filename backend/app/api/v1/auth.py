@@ -25,7 +25,16 @@ from app.core.security import (
 from app.models.base import generate_uuid
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
-from app.schemas.auth import RegisterRequest, TokenResponse, UserResponse, WSTicketResponse
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    MessageResponse,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserResponse,
+    WSTicketResponse,
+)
+from app.services import password_reset as password_reset_service
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -121,6 +130,34 @@ async def login(
     access = await _issue_session(db, user, response)
     logger.info("user_login", user_id=user.id)
     return TokenResponse(access_token=access)
+
+
+@router.post("/forgot-password", response_model=MessageResponse, dependencies=[_AUTH_RATE])
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    """Email a password-reset link if the address maps to an active account.
+
+    Always returns the same body regardless of whether the email exists, so it can't be used
+    to enumerate accounts.
+    """
+    await password_reset_service.request_password_reset(db, data.email)
+    return MessageResponse(
+        message="If that email is registered, a password-reset link is on its way."
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse, dependencies=[_AUTH_RATE])
+async def reset_password(
+    data: ResetPasswordRequest,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    """Redeem a reset token, set the new password, and revoke all existing sessions."""
+    await password_reset_service.reset_password(db, data.token, data.password)
+    _clear_refresh_cookie(response)
+    return MessageResponse(message="Your password has been reset. Please sign in.")
 
 
 @router.post("/refresh", response_model=TokenResponse)

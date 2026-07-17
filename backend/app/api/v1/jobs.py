@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_tenant_db
 from app.config.constants import DEFAULT_PAGE_SIZE
+from app.core.ratelimit import rate_limit
 from app.schemas.job import (
     JobAnalysisResponse,
     JobListingResponse,
@@ -17,8 +18,16 @@ from app.services import job_search as job_service
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
+# Job search fans out to browser automation / Exa — cap per-client rate.
+_COSTLY = Depends(rate_limit(30, 60))
 
-@router.post("/search", response_model=JobListResponse, summary="Search for jobs across platforms")
+
+@router.post(
+    "/search",
+    response_model=JobListResponse,
+    dependencies=[_COSTLY],
+    summary="Search for jobs across platforms",
+)
 async def search_jobs(
     request: JobSearchRequest,
     user: CurrentUser,

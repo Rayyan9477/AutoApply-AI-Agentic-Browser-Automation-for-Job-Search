@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_redis, get_tenant_db
 from app.config.constants import DEFAULT_PAGE_SIZE
 from app.core.automation.intervention import resolve_intervention
+from app.core.ratelimit import rate_limit
 from app.db.arq import get_arq_pool
 from app.schemas.application import (
     ApplicationBatchCreate,
@@ -27,9 +28,13 @@ from app.services import dispatch
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
+# Apply dispatch + cover-letter generation trigger LLM/browser work — cap per-client rate.
+_COSTLY = Depends(rate_limit(30, 60))
+
 
 @router.post(
-    "/", response_model=ApplicationResponse, status_code=201, summary="Create an application"
+    "/", response_model=ApplicationResponse, status_code=201, dependencies=[_COSTLY],
+    summary="Create an application",
 )
 async def create_application(
     data: ApplicationCreate,
@@ -47,6 +52,7 @@ async def create_application(
     "/batch",
     response_model=list[ApplicationResponse],
     status_code=201,
+    dependencies=[_COSTLY],
     summary="Batch create applications",
 )
 async def batch_create(
@@ -117,6 +123,7 @@ async def approve_application(
 @router.post(
     "/{app_id}/cover-letter",
     response_model=CoverLetterResponse,
+    dependencies=[_COSTLY],
     summary="Generate a cover letter for an application",
 )
 async def generate_cover_letter(
