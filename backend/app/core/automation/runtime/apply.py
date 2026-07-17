@@ -108,10 +108,13 @@ async def run_apply(
     cfg = (
         await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == app.user_id))
     ).scalar_one_or_none()
-    provider = cfg.preferred_provider if cfg else "openai"
-    model = cfg.default_model if cfg else "gpt-4o"
-    api_key = await store.get_llm_key(db, app.user_id, provider)
-    if not api_key:
+    llm_settings = get_settings().llm
+    provider = cfg.preferred_provider if cfg else llm_settings.preferred_provider
+    model = cfg.default_model if cfg else llm_settings.default_model
+    # Bedrock is platform-authenticated (AWS credential chain) — it needs no per-user key.
+    is_bedrock = provider == "bedrock" or model.startswith("bedrock/")
+    api_key = None if is_bedrock else await store.get_llm_key(db, app.user_id, provider)
+    if not is_bedrock and not api_key:
         raise ApplyPrerequisiteError("No LLM API key configured for the user")
 
     # --- Prerequisites satisfied; drive the browser (real-browser spike path) ---

@@ -80,6 +80,11 @@ def generate_refresh_token() -> str:
     return secrets.token_urlsafe(48)
 
 
+def generate_reset_token() -> str:
+    """Generate an opaque, single-use password-reset token (stored only as a hash)."""
+    return secrets.token_urlsafe(48)
+
+
 def hash_token(raw: str) -> str:
     """SHA-256 hash a refresh token for at-rest storage."""
     return hashlib.sha256(raw.encode()).hexdigest()

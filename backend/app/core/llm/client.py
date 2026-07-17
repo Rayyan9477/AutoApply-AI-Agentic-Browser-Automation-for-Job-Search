@@ -106,6 +106,10 @@ class LLMClient:
         if self._credentials is not None:
             return [model or self._credentials.default_model]
         primary = model or self._llm.default_model
+        # Bedrock is platform-authenticated (AWS creds) — cross-provider fallbacks like
+        # ``groq/anthropic.claude-...`` would be nonsense, so route Bedrock straight through.
+        if primary.startswith("bedrock/"):
+            return [primary]
         fallbacks = [
             f"{provider}/{primary.split('/')[-1]}"
             for provider in self._llm.fallback_providers
@@ -174,7 +178,11 @@ class LLMClient:
                     kwargs["response_format"] = response_format
                 if metadata:
                     kwargs["metadata"] = metadata
-                if self._credentials is not None:
+                if attempt_model.startswith("bedrock/"):
+                    # Bedrock authenticates via the AWS credential chain (env/~/.aws/role);
+                    # only the region is passed — never an api_key.
+                    kwargs["aws_region_name"] = self._llm.bedrock_region
+                elif self._credentials is not None:
                     kwargs["api_key"] = self._credentials.api_key
 
                 response = await litellm.acompletion(**kwargs)

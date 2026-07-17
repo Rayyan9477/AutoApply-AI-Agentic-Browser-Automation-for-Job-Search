@@ -16,7 +16,9 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_healthy
 
   api:
     build:
@@ -24,8 +26,17 @@ services:
       dockerfile: docker/Dockerfile.api
     restart: unless-stopped
     env_file: [.env.prod]
-    depends_on: [redis]
+    depends_on:
+      redis:
+        condition: service_healthy
     expose: ["8000"]
+    # /health is a real readiness probe (503 if the DB is unreachable).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   worker:
     build:
@@ -33,15 +44,29 @@ services:
       dockerfile: docker/Dockerfile.worker
     restart: unless-stopped
     env_file: [.env.prod]
-    depends_on: [redis]
+    depends_on:
+      redis:
+        condition: service_healthy
     mem_limit: 2g        # headful Chromium is RAM-hungry
     shm_size: 1gb        # Chrome needs a large /dev/shm
+    # Liveness proxy: the worker can reach its Redis queue.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,redis; redis.from_url(os.environ['REDIS_URL']).ping()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
     volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
 
 volumes:
   caddy_data:

@@ -39,6 +39,10 @@ class LLMSettings(BaseSettings):
     default_model: str = "gpt-4o"
     temperature: float = 0.7
     max_tokens: int = 4096
+    # AWS Bedrock: platform-authenticated via the standard AWS credential chain (env vars,
+    # ~/.aws, or an instance/role) — no per-user key. Use a ``bedrock/<model-id>`` default_model
+    # (e.g. ``bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0``) to route through Bedrock.
+    bedrock_region: str = "us-east-1"
 
     @field_validator("temperature")
     @classmethod
@@ -88,6 +92,29 @@ class AuthSettings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
     ws_ticket_expire_seconds: int = 60
+
+
+class EmailSettings(BaseSettings):
+    """Transactional email (password reset). Defaults to the ``log`` provider, which writes the
+    would-be email to the logs so the flow is fully functional in dev/CI without a mail server.
+    Set ``provider=smtp`` plus the SMTP fields (or point at SES/Mailgun SMTP) for real delivery.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="EMAIL__")
+
+    provider: str = "log"  # "log" (dev/CI) | "smtp"
+    from_address: str = "no-reply@autoapply.ai"
+    from_name: str = "AutoApply AI"
+    # Frontend origin used to build the reset link the user clicks.
+    frontend_base_url: str = "http://localhost:5173"
+    reset_token_expire_minutes: int = 30
+
+    # SMTP transport (used when provider == "smtp").
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_starttls: bool = True
 
 
 class SecretsSettings(BaseSettings):
@@ -141,6 +168,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Bearer token required to scrape /metrics in production (fail-closed if unset there).
     metrics_token: SecretStr = SecretStr("")
+    # Optional error tracking. When set, Sentry captures unhandled API + worker exceptions.
+    sentry_dsn: SecretStr = SecretStr("")
 
     # Nested settings
     llm: LLMSettings = LLMSettings()
@@ -148,6 +177,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = AuthSettings()
     secrets: SecretsSettings = SecretsSettings()
     storage: StorageSettings = StorageSettings()
+    email: EmailSettings = EmailSettings()
 
     # Job discovery
     exa_api_key: SecretStr = SecretStr("")

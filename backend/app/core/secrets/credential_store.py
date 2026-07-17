@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.secrets.base import EncryptedBlob, SecretsProvider
@@ -99,6 +99,20 @@ class CredentialStore:
         """Return a platform's decrypted browser ``storage_state``, or ``None`` if not set."""
         data = await self._get(db, user_id, _KIND_COOKIES, platform)
         return json.loads(data.decode()) if data is not None else None
+
+    async def delete_session_cookies(
+        self, db: AsyncSession, user_id: str, platform: str
+    ) -> bool:
+        """Delete a platform's stored session cookies. Returns True if a row was removed."""
+        result = await db.execute(
+            delete(UserCredential).where(
+                UserCredential.user_id == user_id,
+                UserCredential.kind == _KIND_COOKIES,
+                UserCredential.provider == platform,
+            )
+        )
+        await db.commit()
+        return result.rowcount > 0
 
     async def rotate_all(self, db: AsyncSession) -> int:
         """Re-wrap every stored credential under the provider's CURRENT KEK.

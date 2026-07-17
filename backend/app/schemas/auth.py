@@ -34,3 +34,22 @@ class WSTicketResponse(BaseModel):
     """Short-lived ticket for authenticating a WebSocket handshake."""
 
     ticket: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request a password-reset link for an email address."""
+
+    email: str = Field(min_length=3, max_length=320)
+
+
+class ResetPasswordRequest(BaseModel):
+    """Redeem a reset token and set a new password."""
+
+    token: str = Field(min_length=16, max_length=256)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    """Generic message envelope for endpoints with no resource body."""
+
+    message: str

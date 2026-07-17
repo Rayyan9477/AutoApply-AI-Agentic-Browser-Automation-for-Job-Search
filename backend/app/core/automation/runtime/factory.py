@@ -39,8 +39,20 @@ def build_browser_profile(
     )
 
 
-def build_apply_llm(api_key: str, model: str = "gpt-4o") -> Any:
-    """Build the browser-use LLM the agent reasons with (BYO key)."""
+def build_apply_llm(api_key: str | None, model: str = "gpt-4o") -> Any:
+    """Build the browser-use LLM the agent reasons with.
+
+    A ``bedrock/<model-id>`` model routes through AWS Bedrock, authenticated via the standard
+    AWS credential chain (env / ~/.aws / instance role) — no api_key. Any other model uses the
+    per-user BYO key via ``ChatOpenAI``.
+    """
+    if model.startswith("bedrock/"):
+        from browser_use.llm import ChatAnthropicBedrock
+
+        return ChatAnthropicBedrock(
+            model=model.split("/", 1)[1],
+            aws_region=get_settings().llm.bedrock_region,
+        )
     from browser_use import ChatOpenAI
 
     return ChatOpenAI(model=model, api_key=api_key)
