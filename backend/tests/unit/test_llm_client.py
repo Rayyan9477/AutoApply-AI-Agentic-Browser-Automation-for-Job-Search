@@ -30,6 +30,7 @@ def _make_settings_mock() -> MagicMock:
     llm.temperature = 0.7
     llm.max_tokens = 1024
     llm.fallback_providers = []
+    llm.bedrock_region = "us-east-1"
     llm.portkey_api_key.get_secret_value.return_value = ""
     llm.openai_api_key.get_secret_value.return_value = "sk-test"
     llm.groq_api_key.get_secret_value.return_value = ""
@@ -94,6 +95,37 @@ class TestCompleteSuccess:
             result = await client.complete("prompt")
 
         assert result.model == "openai/gpt-4o"
+
+
+class TestBedrock:
+    """AWS Bedrock is platform-authenticated (AWS credential chain), not a per-user BYO key."""
+
+    def _bedrock_client(self, region: str = "us-east-1") -> LLMClient:
+        settings = _make_settings_mock()
+        settings.llm.default_model = "bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0"
+        settings.llm.fallback_providers = ["groq", "openrouter"]
+        settings.llm.bedrock_region = region
+        with patch("app.core.llm.client.get_settings", return_value=settings):
+            with patch("app.core.llm.client.litellm"):
+                return LLMClient()
+
+    def test_bedrock_primary_has_no_cross_provider_fallbacks(self) -> None:
+        # A bedrock/<id> model must not spawn nonsense fallbacks like groq/anthropic.claude...
+        chain = self._bedrock_client()._get_model_chain(None)
+        assert chain == ["bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0"]
+
+    async def test_complete_passes_aws_region_and_no_api_key(self) -> None:
+        client = self._bedrock_client(region="us-west-2")
+        resp = _make_completion_response("ok")
+        with patch("app.core.llm.client.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=resp)
+            mock_litellm.completion_cost.return_value = 0.0
+            mock_litellm.Usage = MagicMock
+            await client.complete("hi")
+        kwargs = mock_litellm.acompletion.call_args.kwargs
+        assert kwargs["model"].startswith("bedrock/")
+        assert kwargs["aws_region_name"] == "us-west-2"
+        assert "api_key" not in kwargs  # Bedrock uses AWS creds, never an api_key
 
 
 # ---------------------------------------------------------------------------

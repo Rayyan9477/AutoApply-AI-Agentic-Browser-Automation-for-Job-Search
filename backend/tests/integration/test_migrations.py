@@ -19,6 +19,7 @@ EXPECTED_TABLES = {
     "resumes",
     "llm_usage",
     "refresh_tokens",
+    "password_reset_tokens",
     "user_credentials",
     "user_llm_configs",
     "user_settings",
