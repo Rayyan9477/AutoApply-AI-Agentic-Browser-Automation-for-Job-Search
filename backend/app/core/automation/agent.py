@@ -117,13 +117,89 @@ class BrowserAgent:
                 await self._browser.close()
 
     def _get_default_llm(self) -> Any:
-        """Create a default LangChain ChatOpenAI instance.
+        """Create a LangChain-compatible LLM based on the preferred provider.
+
+        Falls back through: OpenAI → DeepSeek (OpenAI-compatible) → Groq.
 
         Returns:
-            ChatOpenAI configured from application settings.
+            LangChain chat model instance configured from application settings.
 
         Raises:
-            BrowserError: If langchain-openai is not installed.
+            BrowserError: If no suitable LLM package is installed.
+        """
+        settings = get_settings()
+        llm_config = settings.llm
+        preferred = llm_config.preferred_provider
+
+        openai_key = llm_config.openai_api_key.get_secret_value()
+        deepseek_key = llm_config.deepseek_api_key.get_secret_value()
+        groq_key = llm_config.groq_api_key.get_secret_value()
+
+        # Try preferred provider first
+        if preferred == "openai" and openai_key:
+            return self._build_chat_openai(
+                model=llm_config.default_model,
+                api_key=openai_key,
+            )
+
+        if preferred == "deepseek" and deepseek_key:
+            return self._build_chat_openai(
+                model="deepseek-chat",
+                api_key=deepseek_key,
+                base_url="https://api.deepseek.com/v1",
+            )
+
+        if preferred == "groq" and groq_key:
+            try:
+                from langchain_groq import ChatGroq
+            except ImportError as exc:
+                raise BrowserError(
+                    "langchain-groq not installed. Install with: pip install langchain-groq"
+                ) from exc
+            return ChatGroq(
+                model="llama-3.1-70b-versatile",
+                api_key=groq_key,
+                temperature=llm_config.temperature,
+            )
+
+        # Fallback chain when preferred provider is not available
+        if openai_key:
+            return self._build_chat_openai(
+                model=llm_config.default_model,
+                api_key=openai_key,
+            )
+
+        if deepseek_key:
+            return self._build_chat_openai(
+                model="deepseek-chat",
+                api_key=deepseek_key,
+                base_url="https://api.deepseek.com/v1",
+            )
+
+        if groq_key:
+            try:
+                from langchain_groq import ChatGroq
+            except ImportError as exc:
+                raise BrowserError(
+                    "langchain-groq not installed. Install with: pip install langchain-groq"
+                ) from exc
+            return ChatGroq(
+                model="llama-3.1-70b-versatile",
+                api_key=groq_key,
+                temperature=llm_config.temperature,
+            )
+
+        raise BrowserError(
+            "No LLM provider configured. Set at least LLM__OPENAI_API_KEY, "
+            "LLM__DEEPSEEK_API_KEY, or LLM__GROQ_API_KEY in your .env file."
+        )
+
+    def _build_chat_openai(
+        self, model: str, api_key: str, base_url: str | None = None,
+    ) -> Any:
+        """Create a ChatOpenAI instance, optionally with a custom base URL.
+
+        This works for both OpenAI and OpenAI-compatible providers like DeepSeek.
         """
         try:
             from langchain_openai import ChatOpenAI
@@ -133,12 +209,15 @@ class BrowserAgent:
                 "Install with: pip install langchain-openai"
             ) from exc
 
-        settings = get_settings()
-        return ChatOpenAI(
-            model=settings.llm.default_model,
-            api_key=settings.llm.openai_api_key.get_secret_value(),
-            temperature=settings.llm.temperature,
-        )
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "api_key": api_key,
+            "temperature": get_settings().llm.temperature,
+        }
+        if base_url:
+            kwargs["base_url"] = base_url
+
+        return ChatOpenAI(**kwargs)
 
     async def close(self) -> None:
         """Close the browser session and release resources."""

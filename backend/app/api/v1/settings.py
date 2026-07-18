@@ -81,6 +81,7 @@ async def list_llm_providers() -> list[LLMProviderStatus]:
         ("groq", llm.groq_api_key, "llama-3.1-70b-versatile"),
         ("gemini", llm.gemini_api_key, "gemini-pro"),
         ("openrouter", llm.openrouter_api_key, llm.default_model),
+        ("deepseek", llm.deepseek_api_key, "deepseek-chat"),
         ("github", llm.github_token, "gpt-4o"),
     ]
 

@@ -33,6 +33,7 @@ class LLMSettings(BaseSettings):
     groq_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
     openrouter_api_key: SecretStr = SecretStr("")
+    deepseek_api_key: SecretStr = SecretStr("")
     github_token: SecretStr = SecretStr("")
     preferred_provider: str = "openai"
     fallback_providers: list[str] = ["groq", "openrouter"]
