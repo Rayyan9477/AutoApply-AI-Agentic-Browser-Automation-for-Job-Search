@@ -30,11 +30,35 @@ describe('ResumeCard', () => {
     await userEvent.click(screen.getByRole('button', { name: /select résumé/i }));
     expect(onSelect).toHaveBeenCalledOnce();
 
-    await userEvent.click(screen.getByRole('button', { name: /^optimize$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /optimize résumé/i }));
     expect(onOptimize).toHaveBeenCalledOnce();
 
-    await userEvent.click(screen.getByRole('button', { name: /^download$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /download résumé/i }));
     expect(onDownload).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledOnce(); // inner buttons don't bubble to select
+  });
+
+  it('renders an em-dash for a null ATS and disables optimize while in flight', () => {
+    render(<ResumeCard resume={resume({ ats_score: null })} selected={false} onSelect={noop} onOptimize={noop} onDownload={noop} optimizing />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /optimize résumé/i })).toBeDisabled();
+  });
+
+  it('folds the variant and job context into the select button accessible name', () => {
+    render(<ResumeCard resume={resume({ type: 'tailored' })} jobLabel="Senior PM" selected={false} onSelect={noop} onOptimize={noop} onDownload={noop} optimizing={false} />);
+    expect(
+      screen.getByRole('button', { name: 'Select résumé Alex Morgan — Senior PM — Tailored, tailored for Senior PM' }),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the job context from the select button name when there is no job label', () => {
+    render(<ResumeCard resume={resume({ type: 'base' })} selected={false} onSelect={noop} onOptimize={noop} onDownload={noop} optimizing={false} />);
+    expect(screen.getByRole('button', { name: 'Select résumé Alex Morgan — Senior PM — Base' })).toBeInTheDocument();
+  });
+
+  it('disables download when the résumé has neither PDF nor DOCX', () => {
+    render(<ResumeCard resume={resume({ has_pdf: false, has_docx: false })} selected={false} onSelect={noop} onOptimize={noop} onDownload={noop} optimizing={false} />);
+    expect(screen.getByRole('button', { name: /download résumé/i })).toBeDisabled();
   });
 });

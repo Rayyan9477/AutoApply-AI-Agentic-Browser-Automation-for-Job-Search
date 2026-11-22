@@ -61,4 +61,50 @@ describe('ResumePreviewPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /pdf/i }));
     expect(onDownload).toHaveBeenCalledWith('pdf');
   });
+
+  it('shows the before/after ATS delta pill for an optimized résumé (design §RÉSUMÉS)', () => {
+    render(
+      <ResumePreviewPanel
+        {...base}
+        resume={resume({ id: 'r2', type: 'optimized', base_resume_id: 'r1', ats_score: 0.81 })}
+        baseAtsScore={0.62}
+      />,
+    );
+    // after 81 vs was 62 → +19
+    expect(screen.getByText(/\+19 ATS after optimization/i)).toBeInTheDocument();
+    expect(screen.getByText(/was 62/i)).toBeInTheDocument();
+  });
+
+  it('hides the delta pill for base résumés and when the prior score is unknown', () => {
+    const { rerender } = render(<ResumePreviewPanel {...base} baseAtsScore={0.62} />);
+    expect(screen.queryByText(/after optimization/i)).not.toBeInTheDocument();
+    rerender(
+      <ResumePreviewPanel
+        {...base}
+        resume={resume({ id: 'r2', type: 'optimized', base_resume_id: 'r1', ats_score: 0.81 })}
+      />,
+    );
+    expect(screen.queryByText(/after optimization/i)).not.toBeInTheDocument();
+  });
+
+  it('ignores a score that belongs to a different résumé (shows base ATS, not the stale score)', () => {
+    const staleScore = { ...score, resume_id: 'SOMEONE-ELSE' };
+    render(<ResumePreviewPanel {...base} resume={resume({ id: 'r1', ats_score: 0.82 })} score={staleScore} />);
+    expect(screen.getByText('82')).toBeInTheDocument(); // this résumé's own ATS
+    expect(screen.queryByText('90')).not.toBeInTheDocument(); // the other résumé's overall
+    expect(screen.getByText(/score this résumé against a job/i)).toBeInTheDocument();
+  });
+
+  it('shows "Scoring…" and disables the button while a score is in flight', () => {
+    render(<ResumePreviewPanel {...base} targetJobId="j1" scoring />);
+    expect(screen.getByRole('button', { name: /scoring/i })).toBeDisabled();
+  });
+
+  it('offers a DOCX download when the résumé has a DOCX and disables PDF when there is none', async () => {
+    const onDownload = vi.fn();
+    render(<ResumePreviewPanel {...base} resume={resume({ has_pdf: false, has_docx: true })} onDownload={onDownload} />);
+    expect(screen.getByRole('button', { name: /pdf/i })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /docx/i }));
+    expect(onDownload).toHaveBeenCalledWith('docx');
+  });
 });

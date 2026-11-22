@@ -16,6 +16,7 @@ import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SystemStatePage from '@/pages/SystemStatePage';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireSuperuser } from '@/components/auth/RequireSuperuser';
@@ -31,6 +32,7 @@ function App() {
         <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
         <Route path="/register" element={<PublicOnly redirectTo="/onboarding"><RegisterPage /></PublicOnly>} />
         <Route path="/forgot-password" element={<PublicOnly><ForgotPasswordPage /></PublicOnly>} />
+        <Route path="/reset-password" element={<PublicOnly><ResetPasswordPage /></PublicOnly>} />
         <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
         <Route
           element={
