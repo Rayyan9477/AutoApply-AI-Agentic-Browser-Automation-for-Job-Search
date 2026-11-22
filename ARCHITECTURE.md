@@ -1,275 +1,220 @@
-# AutoApply AI — System Architecture v2.0
+# AutoApply AI — System Architecture v2.0 (Enterprise MVP)
 
-> **NOTE (2026-07):** sections of this document predate the multi-tenant re-architecture; where it
-> conflicts with the code or README, the code wins. See `docs/SETUP_AND_BREADCRUMBS.md` for current
-> operational reality.
+AutoApply AI is a full-stack, multi-tenant agentic platform that automates the job search lifecycle: aggregated multi-platform discovery, ATS compatibility scoring, automated LLM tailoring of resumes and cover letters, browser-based job submission via `browser-use` and Playwright, and a continuous self-evolving evaluation harness.
+
+---
 
 ## Table of Contents
 1. [High-Level Architecture](#1-high-level-architecture)
-2. [Project Structure](#2-project-structure)
+2. [Project Layout](#2-project-layout)
 3. [Backend Architecture](#3-backend-architecture)
+   - [3.1 Layered Design](#31-layered-design)
+   - [3.2 Multi-Tenant Data Isolation](#32-multi-tenant-data-isolation)
+   - [3.3 Security, Auth & Envelope Encryption](#33-security-auth--envelope-encryption)
+   - [3.4 Asynchronous Concurrency Model](#34-asynchronous-concurrency-model)
 4. [Frontend Architecture](#4-frontend-architecture)
-5. [Core Modules](#5-core-modules)
-6. [Data Flow](#6-data-flow)
-7. [API Contracts](#7-api-contracts)
-8. [Data Models](#8-data-models)
-9. [Infrastructure](#9-infrastructure)
-10. [Observability](#10-observability)
-11. [Migration Plan](#11-migration-plan)
+   - [4.1 Design-Token UI & Token Architecture](#41-design-token-ui--token-architecture)
+   - [4.2 State Management & Client Pipeline](#42-state-management--client-pipeline)
+   - [4.3 Real-Time Event System (WebSocket)](#43-real-time-event-system-websocket)
+5. [Core Engine Modules](#5-core-engine-modules)
+   - [5.1 Multi-Factor ATS Scoring Engine](#51-multi-factor-ats-scoring-engine)
+   - [5.2 Document Generation & Parsing Engine](#52-document-generation--parsing-engine)
+   - [5.3 LLM Client Layer (AWS Bedrock & BYO Keys)](#53-llm-client-layer-aws-bedrock--byo-keys)
+   - [5.4 Browser Automation & Platform Integrations](#54-browser-automation--platform-integrations)
+   - [5.5 Self-Evolving Evaluation Harness](#55-self-evolving-evaluation-harness)
+6. [Data Flow & Lifecycle Sequences](#6-data-flow--lifecycle-sequences)
+   - [6.1 Job Discovery & Scoring Flow](#61-job-discovery--scoring-flow)
+   - [6.2 Application Submission Modes (`autonomous`, `review`, `batch`)](#62-application-submission-modes-autonomous-review-batch)
+   - [6.3 CAPTCHA/2FA Intervention Rendezvous](#63-captcha2fa-intervention-rendezvous)
+   - [6.4 Resume Tailoring & Optimization Flow](#64-resume-tailoring--optimization-flow)
+7. [API Surface & Endpoint Contracts](#7-api-surface--endpoint-contracts)
+8. [Data Models & Schemas](#8-data-models--schemas)
+9. [Infrastructure & Deployment](#9-infrastructure--deployment)
+10. [Observability & Monitoring](#10-observability--monitoring)
+11. [Enterprise MVP Roadmap & Operational Guide](#11-enterprise-mvp-roadmap--operational-guide)
 
 ---
 
 ## 1. High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (React + MUI)                   │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────────┐  │
-│  │ Dashboard │ │ Job List │ │ Resume   │ │ Application       │  │
-│  │          │ │ & Search │ │ Manager  │ │ Tracker           │  │
-│  └──────────┘ └──────────┘ └──────────┘ └───────────────────┘  │
-│       ▲              ▲           ▲              ▲               │
-│       │     REST API + WebSocket (real-time)    │               │
-└───────┼──────────────┼───────────┼──────────────┼───────────────┘
-        │              │           │              │
-┌───────┼──────────────┼───────────┼──────────────┼───────────────┐
-│       ▼              ▼           ▼              ▼               │
-│                    BACKEND (FastAPI)                             │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    API Layer (v1)                        │    │
-│  │  /jobs  /applications  /resumes  /analytics  /settings  │    │
-│  └────────────────────────┬────────────────────────────────┘    │
-│                           │                                     │
-│  ┌────────────────────────▼────────────────────────────────┐    │
-│  │                  Service Layer                          │    │
-│  │  JobSearchService  ApplicationService  ResumeService    │    │
-│  │  AnalyticsService  QueueService                         │    │
-│  └────────────┬───────────┬────────────┬───────────────────┘    │
-│               │           │            │                        │
-│  ┌────────────▼───┐ ┌─────▼──────┐ ┌──▼──────────────────┐     │
-│  │  Core Modules  │ │  LLM Layer │ │  Queue & Workers    │     │
-│  │  ┌───────────┐ │ │ ┌────────┐ │ │ ┌────────────────┐ │     │
-│  │  │ Browser   │ │ │ │Portkey │ │ │ │ Redis Queue    │ │     │
-│  │  │ Automation│ │ │ │Gateway │ │ │ │ ┌────────────┐ │ │     │
-│  │  │(browser-  │ │ │ │   │    │ │ │ │ │App Worker  │ │ │     │
-│  │  │ use Agent)│ │ │ │   ▼    │ │ │ │ │Scrape Wrkr │ │ │     │
-│  │  ├───────────┤ │ │ │LiteLLM│ │ │ │ └────────────┘ │ │     │
-│  │  │ Document  │ │ │ │   │    │ │ │ └────────────────┘ │     │
-│  │  │ Engine    │ │ │ │   ▼    │ │ └────────────────────┘     │
-│  │  │(PDF/DOCX) │ │ │ │OpenAI │ │                              │
-│  │  ├───────────┤ │ │ │Groq   │ │                              │
-│  │  │ ATS       │ │ │ │Gemini │ │                              │
-│  │  │ Scorer    │ │ │ │Local  │ │                              │
-│  │  ├───────────┤ │ │ └────────┘ │                              │
-│  │  │ Matching  │ │ └────────────┘                              │
-│  │  │ (FAISS)   │ │                                             │
-│  │  └───────────┘ │                                             │
-│  └────────────────┘                                             │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Data Layer                                   │   │
-│  │  ┌──────────┐  ┌───────────┐  ┌────────────────────┐    │   │
-│  │  │ SQLite/  │  │   Redis   │  │ FAISS Vector       │    │   │
-│  │  │ Postgres │  │ Cache+Queue│  │ Indices            │    │   │
-│  │  └──────────┘  └───────────┘  └────────────────────┘    │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │           Observability                                   │   │
-│  │  Structlog → Prometheus Metrics → LLM Tracing (Portkey)  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                   FRONTEND (React 18 + Vite + TypeScript)              │
+│  ┌───────────────┐ ┌────────────────┐ ┌───────────────┐ ┌───────────┐  │
+│  │   Dashboard   │ │  Job Discovery │ │   Resumes &   │ │Application│  │
+│  │   & Pipeline  │ │  & Job Drawer  │ │ Preview Panel │ │  Tracker  │  │
+│  └───────────────┘ └────────────────┘ └───────────────┘ └───────────┘  │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ State: Zustand (Auth, App, UI) + TanStack Query + Custom Tokens  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│       ▲                                  ▲                             │
+│       │ REST (Axios + Cookies)           │ WebSocket (?ticket=...)     │
+└───────┼──────────────────────────────────┼─────────────────────────────┘
+        │                                  │
+┌───────┼──────────────────────────────────┼─────────────────────────────┐
+│       ▼                                  ▼                             │
+│                    FASTAPI BACKEND (/api/v1)                           │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ Security Headers, CORS, Rate Limiters, Token Family Auth Guard   │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │ Route Handlers: /auth, /jobs, /applications, /resumes,           │  │
+│  │                 /analytics, /settings, /platform-sessions, /admin│  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │ Multi-Tenant Context Engine (do_orm_execute auto-scoped filter)  │  │
+│  └────────────────────────┬─────────────────────────────────────────┘  │
+│                           │                                            │
+│  ┌────────────────────────▼─────────────────────────────────────────┐  │
+│  │                         Service Layer                            │  │
+│  │  JobSearchService · ApplicationService · ResumeService           │  │
+│  │  AnalyticsService · DispatchService · PlatformSessionService    │  │
+│  │  PasswordResetService · Mailer (Log/SMTP) · AccountService (GDPR)│  │
+│  └────────────┬───────────┬─────────────┬───────────────────────────┘  │
+│               │           │             │                              │
+│  ┌────────────▼──┐ ┌──────▼──────┐ ┌────▼────────────────────────┐     │
+│  │ Core Modules  │ │  LLM Layer  │ │  Queue & Workers (Arq)      │     │
+│  │ ┌───────────┐ │ │ ┌─────────┐ │ │ ┌─────────────────────────┐ │     │
+│  │ │ATS Scorer │ │ │ │LiteLLM  │ │ │ │ Arq Redis Pool          │ │     │
+│  │ │(NLP/TFIDF)│ │ │ │Unified  │ │ │ │ ┌─────────────────────┐ │ │     │
+│  │ ├───────────┤ │ │ ├─────────┤ │ │ │ │apply_to_job         │ │ │     │
+│  │ │Documents  │ │ │ │AWS      │ │ │ │ │review_application   │ │ │     │
+│  │ │(PDF/DOCX) │ │ │ │Bedrock  │ │ │ │ │monitor_system_health│ │ │     │
+│  │ ├───────────┤ │ │ │(Sonnet) │ │ │ │ │purge_deleted_accoun.│ │ │     │
+│  │ │browser-use│ │ │ ├─────────┤ │ │ │ └─────────────────────┘ │ │     │
+│  │ │Playwright │ │ │ │Bedrock  │ │ │ └────────────┬────────────┘ │     │
+│  │ ├───────────┤ │ │ │Mantle   │ │ └──────────────┼──────────────┘     │
+│  │ │Harness &  │ │ │ ├─────────┤ │                │                    │
+│  │ │Judge      │ │ │ │BYO Keys │ │                ▼                    │
+│  │ └───────────┘ │ │ └─────────┘ │         ┌───────────────┐           │
+│  └───────────────┘ └─────────────┘         │ Redis Pub/Sub │           │
+│                                            │ (ws:user:{id})│           │
+│  ┌───────────────────────────────────────┐ └───────┬───────┘           │
+│  │              Data Layer               │         │                   │
+│  │ ┌───────────┐ ┌───────────┐ ┌───────┐ │         ▼                   │
+│  │ │PostgreSQL │ │Credential │ │Tenant │ │ ┌───────────────┐           │
+│  │ │/ SQLite   │ │Store (KEK)│ │Storage│ │ │ WS Connection │           │
+│  │ │AsyncEngine│ │Fernet/KMS │ │S3/R2/ │ │ │    Manager    │           │
+│  │ └───────────┘ └───────────┘ └───────┘ │ └───────────────┘           │
+│  └───────────────────────────────────────┘                             │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ Observability: Structlog · Prometheus (/metrics) · Sentry Tracing│  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Project Structure
+## 2. Project Layout
 
 ```
-AutoApply-AI-Smart-Job-Application-Assistant/
-│
-├── backend/                          # FastAPI backend
+AutoApply-AI-Agentic-Browser-Automation-for-Job-Search/
+├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py                   # FastAPI app factory + lifespan
-│   │   │
+│   │   ├── main.py                     # FastAPI factory, lifespan, security headers, health
 │   │   ├── config/
-│   │   │   ├── settings.py           # Pydantic BaseSettings (env-based)
-│   │   │   └── constants.py          # App-wide constants
-│   │   │
+│   │   │   ├── settings.py             # Pydantic BaseSettings, nested env configs
+│   │   │   └── constants.py            # Platform names, ATS weights, pagination limits
 │   │   ├── api/
-│   │   │   ├── deps.py               # Shared dependencies (get_db, get_redis)
+│   │   │   ├── deps.py                 # Dependency injection: get_tenant_db, get_current_user
 │   │   │   ├── v1/
-│   │   │   │   ├── router.py         # Aggregates all v1 routes
-│   │   │   │   ├── jobs.py           # Job search & listing endpoints
-│   │   │   │   ├── applications.py   # Application CRUD & queue endpoints
-│   │   │   │   ├── resumes.py        # Resume upload, generate, score, download
-│   │   │   │   ├── analytics.py      # Dashboard & reporting endpoints
-│   │   │   │   └── settings.py       # User settings & LLM config endpoints
+│   │   │   │   ├── router.py           # v1 route aggregator with security guards
+│   │   │   │   ├── auth.py             # Register, login, refresh, password reset, account purge
+│   │   │   │   ├── jobs.py             # Search, list, detail, match analysis, deletion
+│   │   │   │   ├── applications.py     # CRUD, batch create, bulk-approve, cover letter, intervention
+│   │   │   │   ├── resumes.py          # Upload, generate, score, optimize, download, profile extract
+│   │   │   │   ├── analytics.py        # Dashboard stats, funnel, ATS distribution, spend, timeline
+│   │   │   │   ├── settings.py         # User apply preferences, platform toggles, provider status
+│   │   │   │   ├── platform_sessions.py# Encrypted browser session import/list/disconnect
+│   │   │   │   └── admin.py            # Superuser system health telemetry
 │   │   │   └── websocket/
-│   │   │       ├── endpoint.py       # WS connection handler
-│   │   │       └── events.py         # ConnectionManager for broadcasting
-│   │   │
-│   │   ├── core/                     # Business logic & domain modules
-│   │   │   ├── exceptions.py         # Custom exception hierarchy
-│   │   │   ├── db_resilience.py      # DB error mapping & retry decorator
-│   │   │   │
-│   │   │   ├── automation/           # Browser automation layer
-│   │   │   │   ├── agent.py          # browser-use Agent wrapper
-│   │   │   │   ├── session_manager.py# Cookie persistence & rotation
-│   │   │   │   └── platforms/
-│   │   │   │       ├── base.py       # Abstract JobPlatform + JobListing
-│   │   │   │       ├── linkedin.py   # LinkedIn integration
-│   │   │   │       ├── indeed.py     # Indeed integration
-│   │   │   │       ├── glassdoor.py  # Glassdoor integration
-│   │   │   │       └── registry.py   # Platform plugin registry
-│   │   │   │
-│   │   │   ├── documents/            # Document generation & parsing
-│   │   │   │   ├── parser.py         # Resume parsing (PDF, DOCX, TXT)
-│   │   │   │   ├── generator.py      # Resume/CL generation orchestrator
-│   │   │   │   ├── pdf_renderer.py   # HTML→PDF via WeasyPrint
-│   │   │   │   ├── docx_renderer.py  # DOCX generation via python-docx
-│   │   │   │   └── templates/        # Built-in resume templates + styles
-│   │   │   │
-│   │   │   ├── ats/                  # ATS scoring & optimization
-│   │   │   │   ├── scorer.py         # Multi-factor resume scorer
-│   │   │   │   ├── optimizer.py      # LLM-powered resume optimization
-│   │   │   │   ├── keyword_analyzer.py # TF-IDF keyword analysis
-│   │   │   │   ├── experience_analyzer.py # Experience extraction
-│   │   │   │   └── skill_matcher.py  # Skill extraction & matching
-│   │   │   │
-│   │   │   ├── llm/                  # LLM integration layer
-│   │   │   │   ├── client.py         # LiteLLM unified client + Portkey
-│   │   │   │   ├── usage_tracker.py  # LLM cost/usage tracking
-│   │   │   │   └── prompts/
-│   │   │   │       └── cover_letter.py # Cover letter prompt templates
-│   │   │   │
-│   │   │   ├── job_discovery/        # External job search
-│   │   │   │   └── exa_search.py     # Exa AI semantic job search
-│   │   │   │
-│   │   │   └── matching/             # Job-candidate matching
-│   │   │       └── vector_store.py   # FAISS vector operations
-│   │   │
-│   │   ├── services/                 # Application services (orchestration)
-│   │   │   ├── job_search.py         # Multi-platform job search
-│   │   │   ├── application.py        # Application lifecycle management
-│   │   │   ├── resume.py             # Resume generation & management
-│   │   │   ├── analytics.py          # Dashboard data aggregation
-│   │   │   └── queue.py              # Redis queue manager
-│   │   │
-│   │   ├── models/                   # SQLAlchemy ORM models
-│   │   │   ├── base.py               # Declarative base + mixins
-│   │   │   ├── job.py                # Job listing model
-│   │   │   ├── application.py        # Application tracking
-│   │   │   ├── resume.py             # Resume records
-│   │   │   ├── llm_usage.py          # LLM usage/cost tracking
-│   │   │   └── user_settings.py      # User settings/preferences
-│   │   │
-│   │   ├── schemas/                  # Pydantic request/response schemas
-│   │   │   ├── job.py
-│   │   │   ├── application.py
-│   │   │   ├── resume.py
-│   │   │   ├── analytics.py
-│   │   │   └── settings.py
-│   │   │
-│   │   ├── db/                       # Database layer
-│   │   │   ├── session.py            # SQLAlchemy async engine + sessions
-│   │   │   ├── redis.py              # Redis connection pool manager
-│   │   │   └── migrations/           # Alembic migrations
-│   │   │
-│   │   ├── workers/                  # Background task workers
-│   │   │   └── tasks.py              # Arq worker (run: arq app.workers.tasks.WorkerSettings)
-│   │   │
-│   │   └── observability/            # Monitoring & logging
-│   │       ├── logging.py            # Structlog configuration
-│   │       ├── metrics.py            # Prometheus metrics definitions
-│   │       └── tracing.py            # LLM cost/latency tracking
-│   │
-│   ├── tests/
-│   │   ├── conftest.py
-│   │   ├── unit/                     # 30+ unit test files
-│   │   ├── integration/              # API integration tests
-│   │   └── e2e/                      # End-to-end pipeline tests
-│   │
-│   ├── alembic.ini
-│   └── pyproject.toml
-│
-├── frontend/                         # React + Vite + TypeScript
+│   │   │       ├── endpoint.py         # Ticket-authenticated /ws route handler
+│   │   │       ├── events.py           # ConnectionManager tracking active sockets
+│   │   │       ├── bus.py              # Redis pub/sub publisher for cross-process events
+│   │   │       └── subscriber.py       # Per-user Redis pub/sub listener task
+│   │   ├── core/
+│   │   │   ├── exceptions.py           # Domain exception taxonomy (AutoApplyError hierarchy)
+│   │   │   ├── security.py             # Argon2id password hashing, PyJWT, token generation
+│   │   │   ├── ratelimit.py            # Redis/memory sliding window rate limiters
+│   │   │   ├── db_resilience.py        # Error mapping and retry decorators
+│   │   │   ├── ats/                    # Multi-factor ATS scoring engine
+│   │   │   │   ├── scorer.py           # Composite weighted scoring (Skills, Exp, Edu, Kw)
+│   │   │   │   ├── keyword_analyzer.py # TF-IDF + phrase matcher + semantic similarity
+│   │   │   │   ├── experience_analyzer.py # Seniority alignment + responsibility extraction
+│   │   │   │   ├── skill_matcher.py    # Canonical skill aliases + SequenceMatcher fuzzy search
+│   │   │   │   ├── optimizer.py        # Gap identification & prompt construction
+│   │   │   │   └── nlp.py              # Process-cached spaCy en_core_web_sm pipeline
+│   │   │   ├── documents/              # Document generation & parsing
+│   │   │   │   ├── parser.py           # PyPDF2 and python-docx text & contact extraction
+│   │   │   │   ├── generator.py        # Orchestrates LLM tailoring + parallel PDF/DOCX render
+│   │   │   │   ├── pdf_renderer.py     # HTML + CSS to PDF via WeasyPrint
+│   │   │   │   └── docx_renderer.py    # Word document generator via python-docx
+│   │   │   ├── llm/                    # Unified LLM client abstraction
+│   │   │   │   ├── client.py           # LiteLLM client with fallback chain & Prometheus tracking
+│   │   │   │   ├── factory.py          # Per-user BYO credential resolver & client builder
+│   │   │   │   ├── mantle.py           # Bedrock Mantle short-term bearer token cache
+│   │   │   │   ├── usage_tracker.py    # Asynchronous token and cost ledger persistence
+│   │   │   │   └── prompts/            # Structured output prompts (resume, cover letter, ATS)
+│   │   │   ├── automation/             # Browser automation layer
+│   │   │   │   ├── agent.py            # browser-use Agent wrapper
+│   │   │   │   ├── intervention.py     # Redis BLPOP/RPUSH rendezvous for CAPTCHA/2FA
+│   │   │   │   ├── platforms/          # JobPlatform plugin registry (LinkedIn, Indeed, Glassdoor)
+│   │   │   │   └── runtime/            # Real-browser apply pipeline, observers, results
+│   │   │   ├── harness/                # Self-evolving evaluation harness
+│   │   │   │   ├── judge.py            # LLM-as-judge independent run verification
+│   │   │   │   ├── diagnose.py         # Rule-based failure classification (13 categories)
+│   │   │   │   ├── distil.py           # LLM site-knowledge distillation
+│   │   │   │   ├── skills.py           # PII-gated domain skill registry & auto-retirement
+│   │   │   │   ├── anomaly.py          # Rolling 6h window anomaly detector
+│   │   │   │   └── record.py           # Persistence for trajectories, verdicts, diagnoses
+│   │   │   ├── secrets/                # Envelope encryption for user keys & platform cookies
+│   │   │   │   ├── credential_store.py # KEK-wrapped storage interface
+│   │   │   │   ├── local.py            # Fernet & MultiFernet provider with key rotation
+│   │   │   │   └── kms.py              # AWS KMS envelope provider
+│   │   │   └── storage/                # Per-tenant file storage abstraction
+│   │   │       ├── service.py          # Anti-IDOR prefix-enforcing tenant facade
+│   │   │       ├── local.py            # Local filesystem backend with HMAC signed URLs
+│   │   │       └── s3.py               # S3/R2/MinIO backend with presigned URLs
+│   │   ├── services/                   # Application orchestration services
+│   │   │   ├── job_search.py           # Multi-platform & Exa search orchestration
+│   │   │   ├── application.py          # Application CRUD, status updates, deduplication
+│   │   │   ├── dispatch.py             # ApplyMode dispatching & bulk approvals
+│   │   │   ├── resume.py               # Upload, score, optimize, tailored generation
+│   │   │   ├── cover_letter.py         # Cover letter generation and persistence
+│   │   │   ├── analytics.py            # Funnel, ATS distribution, timeline, usage stats
+│   │   │   ├── platform_session.py     # Browser session import, verification, cleanup
+│   │   │   ├── password_reset.py       # Enumeration-safe reset workflow
+│   │   │   ├── mailer.py               # Pluggable email delivery (log / SMTP)
+│   │   │   └── account.py              # GDPR soft-delete and hard purge routines
+│   │   ├── models/                     # SQLAlchemy 2.0 ORM models (13 tables)
+│   │   ├── schemas/                    # Pydantic v2 validation contracts
+│   │   ├── db/                         # Database engine, tenant hooks, Redis & Arq pools
+│   │   ├── workers/                    # Arq background worker tasks & cron schedules
+│   │   └── observability/              # Structlog logging, Prometheus metrics, Sentry
+│   ├── tests/                          # 660+ unit and integration test suite
+│   ├── alembic.ini                     # Migration configuration
+│   └── pyproject.toml                  # Backend dependencies and tool configurations
+├── frontend/
 │   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx
-│   │   ├── theme.ts                  # MUI theme configuration
-│   │   │
-│   │   ├── components/               # Reusable UI components
-│   │   │   ├── layout/               # Sidebar, Header, AppLayout
-│   │   │   ├── jobs/                 # JobCard, JobFilters, JobDetail
-│   │   │   ├── applications/         # ApplicationCard, ApplicationStatus
-│   │   │   ├── resumes/              # ResumeUpload, TemplateSelector, ATSScoreCard
-│   │   │   ├── dashboard/            # StatsCards, ApplicationFunnel
-│   │   │   └── common/               # LoadingState, ErrorBoundary, ConfirmDialog
-│   │   │
-│   │   ├── pages/                    # Route-level pages
-│   │   │   ├── DashboardPage.tsx
-│   │   │   ├── JobSearchPage.tsx
-│   │   │   ├── ApplicationsPage.tsx
-│   │   │   ├── ResumesPage.tsx
-│   │   │   ├── SettingsPage.tsx
-│   │   │   └── AnalyticsPage.tsx
-│   │   │
-│   │   ├── hooks/                    # Custom React hooks
-│   │   │   ├── useJobs.ts, useApplications.ts, useResumes.ts
-│   │   │   ├── useAnalytics.ts, useSettings.ts
-│   │   │   └── useWebSocket.ts       # Auto-reconnecting WS hook
-│   │   │
-│   │   ├── services/                 # API client layer
-│   │   │   ├── api.ts                # Axios instance + interceptors
-│   │   │   ├── jobService.ts, applicationService.ts
-│   │   │   ├── resumeService.ts, analyticsService.ts
-│   │   │   └── settingsService.ts
-│   │   │
-│   │   ├── store/                    # State management (Zustand)
-│   │   │   ├── useJobStore.ts
-│   │   │   └── useAppStore.ts
-│   │   │
-│   │   └── types/                    # TypeScript types
-│   │       ├── job.ts, application.ts, resume.ts
-│   │       ├── analytics.ts, settings.ts
-│   │       └── api.ts
-│   │
-│   ├── index.html
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── vite.config.ts
-│
-├── docker/                           # Container configuration
-│   ├── Dockerfile.backend
-│   ├── Dockerfile.frontend
-│   └── nginx.conf                    # Reverse proxy + SPA fallback
-│
-├── docker-compose.yml                # Production stack
-├── docker-compose.dev.yml            # Dev overrides (hot reload)
-│
-├── templates/                        # Resume & cover letter templates
-│   ├── resume/                       # modern, classic, creative, executive, minimal
-│   └── cover_letter/                 # standard, technical, creative
-│
-├── data/                             # Runtime data (gitignored)
-│   ├── db/                           # SQLite database file
-│   ├── uploads/                      # Uploaded resume files
-│   ├── sessions/                     # Browser session cookies
-│   ├── vector_indices/               # FAISS index files
-│   ├── generated/                    # Generated resumes & cover letters
-│   └── logs/                         # Application logs
-│
-├── docs/                             # Additional documentation
-│   ├── SETUP_AND_BREADCRUMBS.md
-│   ├── BUG_LOG.md
-│   └── FRONTEND_DESIGN_PROMPT.md
-│
-├── .env.example                      # Environment variable template
-├── CLAUDE.md                         # Project conventions for AI
-├── ARCHITECTURE.md                   # This file
-└── README.md
+│   │   ├── App.tsx                     # Route definitions with auth guards
+│   │   ├── main.tsx                    # React root with QueryClient & AuthProvider
+│   │   ├── styles/theme.css            # Custom CSS design tokens (no component library)
+│   │   ├── components/                 # Reusable UI components
+│   │   │   ├── auth/                   # RequireAuth, RequireSuperuser, PublicOnly, AuthShell
+│   │   │   ├── layout/                 # AppLayout, Sidebar, Header
+│   │   │   ├── jobs/                   # JobDrawer, filters, score rings
+│   │   │   ├── applications/           # RunTimeline, InterventionModal
+│   │   │   ├── resumes/                # ResumeCard, ResumePreviewPanel
+│   │   │   └── ui/                     # Toaster, OfflineBanner, CommandPalette, Icon
+│   │   ├── pages/                      # 14 route-level pages
+│   │   ├── hooks/                      # Custom React hooks (server state & WebSockets)
+│   │   ├── services/                   # Axios client with single-flight refresh
+│   │   ├── store/                      # Zustand state stores (useAuthStore, useAppStore)
+│   │   └── types/                      # TypeScript domain definitions
+│   └── package.json                    # Frontend dependencies
+├── templates/                          # Resume & Cover letter HTML/CSS templates
+│   ├── resume/                         # modern, classic, creative, executive, minimal
+│   └── cover_letter/                   # standard, technical, creative
+├── deploy/                             # Production runbook, bootstrap script, credentials checklist
+└── docs/                               # Operational breadcrumbs, bug logs, design prompts
 ```
 
 ---
@@ -277,634 +222,315 @@ AutoApply-AI-Smart-Job-Application-Assistant/
 ## 3. Backend Architecture
 
 ### 3.1 Layered Design
+The backend follows strict domain-driven, layered boundaries:
+- **API Boundary (`app/api/v1/`):** Validates inbound HTTP/WS payloads with Pydantic v2, enforces authentication and rate limits, translates domain exceptions into standard RFC HTTP error structures, and returns typed responses.
+- **Service Layer (`app/services/`):** Encapsulates business transactions, handles multi-table state transitions, produces background queue jobs, and coordinates cross-domain operations.
+- **Core Domain Modules (`app/core/`):** Pure domain logic independent of HTTP contexts (e.g., scoring algorithms, WeasyPrint renderers, Playwright wrappers, LLM callers, encryption routines).
+- **Persistence & Infrastructure (`app/db/`, `app/models/`):** SQLAlchemy 2.0 async engine, Redis connection pools, Arq background workers, and S3-compatible object storage.
 
-```
-┌──────────────────────────────────────────┐
-│           API Routes (api/v1/)           │  ← HTTP request/response handling
-│   Validates input, calls services,       │
-│   returns Pydantic schemas               │
-├──────────────────────────────────────────┤
-│           Services (services/)           │  ← Business logic orchestration
-│   Coordinates core modules,              │
-│   manages transactions, queues tasks     │
-├──────────────────────────────────────────┤
-│          Core Modules (core/)            │  ← Domain logic
-│   Automation, Documents, ATS, LLM,       │
-│   Matching — each self-contained         │
-├──────────────────────────────────────────┤
-│          Data Layer (db/, models/)        │  ← Persistence
-│   SQLAlchemy ORM, Redis, FAISS           │
-└──────────────────────────────────────────┘
-```
+### 3.2 Multi-Tenant Data Isolation
+To ensure strict enterprise-grade data boundaries and eliminate Insecure Direct Object Reference (IDOR) vulnerabilities:
+- **`TenantMixin`:** Abstract model base adding an indexed `user_id` foreign key referencing `users.id` with `ondelete="CASCADE"`.
+- **Ambient SQL Filter Hook (`app/db/tenant.py`):**
+  ```python
+  @event.listens_for(AsyncSession.sync_session_class, "do_orm_execute")
+  def _apply_tenant_filter(state: ORMExecuteState) -> None:
+      uid = current_user_id.get()
+      if uid is not None and state.is_select and not state.execution_options.get("skip_tenant_filter", False):
+          state.statement = state.statement.options(
+              with_loader_criteria(TenantMixin, lambda cls: cls.user_id == uid, include_aliases=True)
+          )
+  ```
+  Every query executing through `get_tenant_db` automatically injects the tenant filter. Developers cannot accidentally forget `.where(user_id=...)`.
+- **Tenant-Scoped Object Storage (`StorageService`):** Enforces that any file read, write, or deletion strictly begins with `users/{user_id}/`. Attempting to access keys outside this namespace raises a `PermissionError`.
 
-### 3.2 Dependency Injection (FastAPI native)
+### 3.3 Security, Auth & Envelope Encryption
+- **Password Protection:** Argon2id through `pwdlib.PasswordHash.recommended()`.
+- **Session Tokens:**
+  - Short-lived Access Tokens (15 minutes).
+  - Long-lived rotating Refresh Tokens stored as SHA-256 hashes inside an `httpOnly`, `Secure`, `SameSite=Strict` cookie (`/api/v1/auth`).
+  - **Token Reuse Detection:** Every refresh token belongs to a `family_id`. When rotated, the token is marked `used=True`. If an already-used token is presented again (indicating token theft or replay), all tokens in that `family_id` are revoked immediately.
+- **Envelope Encryption for BYO Secrets & Platform Cookies:**
+  - `CredentialStore` encrypts secrets using Fernet (AES-128-CBC + HMAC-SHA256) or AWS KMS.
+  - Encryption context binds `user_id`, `kind`, and `provider` to the ciphertext.
+  - Supports zero-downtime key rotation via `rotate_all()`.
 
-```python
-# api/deps.py
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_factory() as session:
-        yield session
-
-async def get_redis() -> Redis:
-    return redis_pool
-
-async def get_llm_client() -> LLMClient:
-    return LLMClient(settings.llm)
-
-async def get_job_search_service(
-    db: AsyncSession = Depends(get_db),
-    llm: LLMClient = Depends(get_llm_client),
-) -> JobSearchService:
-    return JobSearchService(db=db, llm=llm)
-```
-
-### 3.3 Async-First Design
-
-All I/O operations are async:
-- Database: `sqlalchemy[asyncio]` with `aiosqlite`
-- HTTP: `httpx.AsyncClient`
-- Browser: `browser-use` (built on async Playwright)
-- Redis: `redis.asyncio`
-- LLM calls: `litellm.acompletion()`
+### 3.4 Asynchronous Concurrency Model
+- Async-first runtime on Python 3.11+ using `asyncio`.
+- All heavy CPU work (spaCy tokenization, WeasyPrint PDF compilation, PyPDF2/DOCX parsing) is explicitly offloaded from the main event loop to thread executors via `loop.run_in_executor()` or `asyncio.to_thread()`.
+- Background tasks run in dedicated Arq worker processes, completely decoupled from API HTTP processing.
 
 ---
 
 ## 4. Frontend Architecture
 
-### 4.1 Tech Stack
-- **React 18** with TypeScript
-- **Vite** for build tooling
-- **Custom design-token UI** (CSS variables + inline styles; no component library)
-- **Zustand** for state management (lightweight, no boilerplate)
-- **React Router v6** for routing
-- **Axios** for API calls
-- **Recharts** for analytics charts
-- **React Query (TanStack Query)** for server state caching
+### 4.1 Design-Token UI & Token Architecture
+The frontend intentionally does not rely on third-party UI libraries (such as Material-UI or Tailwind CSS). Instead, it uses a bespoke design-token system implemented in `frontend/src/styles/theme.css`:
+- **CSS Variables:** Colors (`--bg`, `--surface`, `--accent`, `--border`), typography (`--font`, `--mono`), status colors (`--applied`, `--review`, `--interview`, `--offer`, `--failed`), and animations (`--ease`).
+- **Performance:** Near-zero CSS bundle overhead, zero runtime CSS-in-JS style injection cost, and seamless theme switching.
 
-### 4.2 Pages & Routes
+### 4.2 State Management & Client Pipeline
+- **Server State (TanStack Query):** Manages all remote API state, background polling, stale-while-revalidate caching, and optimistic updates.
+- **UI State (Zustand):**
+  - `useAuthStore`: Holds current user metadata, authentication status, and in-memory access token.
+  - `useAppStore`: Controls global toast notifications, WebSocket connectivity indicators, and active CAPTCHA/2FA intervention dialogs.
+  - `useUiStore`: Manages sidebar collapsed state and command palette visibility.
+- **Single-Flight Refresh Guard (`services/api.ts`):** Transparently intercepts `401 Unauthorized` responses on authenticated requests, deduplicates concurrent refresh calls into a single promise, updates the auth store, and replays failed requests.
 
-| Route | Page | Description |
-|---|---|---|
-| `/` | DashboardPage | Stats, recent activity, quick actions |
-| `/jobs` | JobSearchPage | Search, filter, browse jobs |
-| `/jobs/:id` | JobDetailPage | Job details, match score, apply action |
-| `/applications` | ApplicationsPage | Track all applications, status filters |
-| `/resumes` | ResumesPage | Upload, manage, generate resumes |
-| `/analytics` | AnalyticsPage | Charts, funnel, ATS score distribution |
-| `/settings` | SettingsPage | LLM config, apply mode, platform auth |
-
-### 4.3 Real-time Updates
-
-WebSocket connection for:
-- Browser automation progress (live screenshots, step-by-step status)
-- Application status changes
-- Queue position updates
-- LLM generation progress
+### 4.3 Real-Time Event System (WebSocket)
+- **Handshake:** Authenticated via a short-lived ticket obtained from `GET /api/v1/auth/ws-ticket`, passing `?ticket=...` on connection.
+- **Cross-Process Pub/Sub Bridge:**
+  1. Background Arq workers publish events to Redis channels: `ws:user:{user_id}`.
+  2. The API server's WebSocket subscriber receives the event and sends it to the specific client's WebSocket connection.
+  3. `useApplicationEvents` hook invalidates relevant React Query caches or raises the `InterventionModal`.
 
 ---
 
-## 5. Core Modules
+## 5. Core Engine Modules
 
-### 5.1 Browser Automation (`core/automation/`)
+### 5.1 Multi-Factor ATS Scoring Engine
+Located in `backend/app/core/ats/`:
+- **Scoring Breakdown:**
+  $$\text{Composite Score} = 0.4 \times S + 0.3 \times E + 0.2 \times Ed + 0.1 \times K$$
+  - **Skills ($S$):** Exact and fuzzy string matching (`SequenceMatcher`) across canonical alias maps (`SKILL_VARIATIONS`).
+  - **Experience ($E$):** Regex-based required years extraction, seniority rank alignment (`entry` to `management`), and responsibility phrase matching.
+  - **Education ($Ed$):** Degree hierarchy scoring (1: High School, 2: Associate, 3: Bachelor's, 4: Master's, 5: PhD).
+  - **Keywords ($K$):** TF-IDF weighted overlap (40%), document semantic similarity (30%), and industry-specific phrase matching (30%).
+- **Score Scale:** All scoring modules output a float between `0.0` and `1.0`. The frontend normalizes this to `0 - 100` for display.
 
+### 5.2 Document Generation & Parsing Engine
+Located in `backend/app/core/documents/`:
+- **Parsing:** `DocumentParser` extracts structured data, contact information, and bullet points from PDF and DOCX uploads.
+- **Generation:** `DocumentGenerator` accepts structured resume data (`TailoredResumeData`), formats it for the requested template, and compiles PDF and DOCX in parallel.
+- **Storage:** Rendered documents are persisted into per-tenant storage keys: `users/{user_id}/generated/resumes/{id}.pdf`.
+
+### 5.3 LLM Client Layer (AWS Bedrock & BYO Keys)
+Located in `backend/app/core/llm/`:
+- **Provider Router:** Built on LiteLLM.
+- **Platform Provider:** AWS Bedrock (`bedrock/us.anthropic.claude-sonnet-4-6`) with fallback to Gemma 3 27B (`bedrock/google.gemma-3-27b-it`).
+- **Bedrock Mantle Endpoint:** Exposes wider foundation model catalogs through an OpenAI-compatible interface using cached 12-hour IAM-derived bearer tokens.
+- **BYO Key Support:** Users can supply custom OpenAI, Groq, Gemini, or OpenRouter keys encrypted at rest.
+- **Structured Output:** Strictly enforced through JSON schema prompts and Pydantic validation via `complete_with_structured_output()`.
+
+### 5.4 Browser Automation & Platform Integrations
+Located in `backend/app/core/automation/`:
+- **Core Technology:** `browser-use` Agent built on Playwright.
+- **Platform Plugins (`JobPlatform` ABC):** Implementations for LinkedIn, Indeed, and Glassdoor (`search`, `scrape_details`, `apply`, `login`).
+- **Session Replay:** Browser automation loads an encrypted `storage_state` (cookies and local storage) imported via `/api/v1/platform-sessions`.
+- **Gating:** Live execution is governed by `BROWSER__LIVE_APPLY`. When false, the worker executes a safe placeholder check.
+
+### 5.5 Self-Evolving Evaluation Harness
+Located in `backend/app/core/harness/`:
+- **Judge (`judge.py`):** Uses an LLM auditor to evaluate final screenshots and URLs, returning an independent `RunVerdict` (`success`, `partial`, `failed`).
+- **Diagnose (`diagnose.py`):** Maps execution signals to a failure taxonomy of 13 classes (`CAPTCHA_WALL`, `TWOFA_REQUIRED`, `ANTIBOT_BLOCK`, `DOM_DRIFT`, `FIELD_MISSING`, `SESSION_EXPIRED`, etc.).
+- **Distil (`distil.py`, `skills.py`):** Extracts reusable site knowledge. Passed through regex and spaCy NER PII filters to eliminate sensitive candidate data before storing into `domain_skills`.
+- **Continuous Feedback:** Skills used in successful runs gain score points (+1); failures lose points (-1). Skills falling to $\le -3$ auto-retire.
+- **System Monitoring (`anomaly.py`):** Runs periodically to detect anomalous failure rates or queue backlogs, logging them to `system_issues`.
+
+---
+
+## 6. Data Flow & Lifecycle Sequences
+
+### 6.1 Job Discovery & Scoring Flow
 ```
-┌─────────────────────────────────────────┐
-│          BrowserAgent (agent.py)         │
-│  Wraps browser-use Agent                │
-│  - Configurable LLM (via LiteLLM)       │
-│  - Session management                   │
-│  - Screenshot capture                   │
-│  - Action logging                       │
-├─────────────────────────────────────────┤
-│       SessionManager (session_mgr.py)   │
-│  - Cookie save/load per platform        │
-│  - Session rotation & refresh           │
-│  - Anti-detection config                │
-├─────────────────────────────────────────┤
-│    Platform Registry (registry.py)      │
-│  - Register/discover platform plugins   │
-│  - Factory: get_platform("linkedin")    │
-├──────────┬──────────┬───────────────────┤
-│ LinkedIn │  Indeed  │  Glassdoor        │
-│ .search()│ .search()│  .search()        │
-│ .scrape()│ .scrape()│  .scrape()        │
-│ .apply() │ .apply() │  .apply()         │
-└──────────┴──────────┴───────────────────┘
-```
-
-**Platform Plugin Interface:**
-```python
-class JobPlatform(ABC):
-    """Base class for job platform integrations."""
-
-    @abstractmethod
-    async def search(self, query: JobSearchQuery) -> list[JobListing]: ...
-
-    @abstractmethod
-    async def scrape_details(self, job_url: str) -> JobDetails: ...
-
-    @abstractmethod
-    async def apply(self, job: JobDetails, resume_path: Path, cover_letter_path: Path) -> ApplicationResult: ...
-
-    @abstractmethod
-    async def login(self, session_manager: SessionManager) -> bool: ...
-```
-
-### 5.2 Document Engine (`core/documents/`)
-
-```
-Input Resume (PDF/DOCX/TXT)
-        │
-        ▼
-  ┌─────────────┐
-  │   Parser     │  PyPDF2, python-docx
-  │  (parser.py) │  Extracts structured text
-  └──────┬──────┘
-         │
-         ▼
-  ┌──────────────┐     ┌──────────────┐
-  │  Generator   │────▶│  LLM Client  │  Tailors content to JD
-  │(generator.py)│◀────│  (Portkey +   │
-  └──────┬──────┘     │   LiteLLM)   │
-         │             └──────────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌────────┐ ┌────────┐
-│  PDF   │ │  DOCX  │
-│Renderer│ │Renderer│
-│(Weasy- │ │(python-│
-│ Print) │ │  docx) │
-└────────┘ └────────┘
-    │           │
-    ▼           ▼
- resume.pdf  resume.docx
+User Search Query (React UI)
+  │
+  ├─► POST /api/v1/jobs/search
+  │     │
+  │     ├─► JobSearchService.search_jobs()
+  │     │     ├─► Parallel Platform Search (LinkedIn, Indeed, Glassdoor via browser-use)
+  │     │     └─► Supplementary Exa AI Semantic Search
+  │     │
+  │     ├─► In-memory deduplication by (platform, platform_job_id)
+  │     ├─► Save unique Job listings to Database
+  │     └─► Return paginated JobListResponse
+  │
+  └─► User opens JobDrawer -> POST /api/v1/jobs/{id}/analyze
+        └─► Runs ResumeScorer against target resume -> returns breakdown
 ```
 
-**Templates:** 5 pre-built designs (Modern, Classic, Creative, Executive, Minimal)
-- HTML + CSS templates rendered to PDF via WeasyPrint
-- Parallel DOCX generation via python-docx with matching styles
-
-### 5.3 ATS Engine (`core/ats/`)
-
+### 6.2 Application Submission Modes (`autonomous`, `review`, `batch`)
 ```
-Resume Text + Job Description
-        │
-   ┌────┴─────────────────────────┐
-   ▼                              ▼
-┌──────────────┐          ┌──────────────┐
-│  Keyword     │          │  Semantic    │
-│  Analyzer    │          │  Scorer      │
-│  (TF-IDF)    │          │  (FAISS +    │
-│              │          │  SentenceTF) │
-└──────┬───────┘          └──────┬───────┘
-       │                         │
-       ▼                         ▼
-┌──────────────────────────────────────┐
-│         Composite ATS Score          │
-│   keyword: 40% | semantic: 35%      │
-│   skills: 15%  | format: 10%        │
-├──────────────────────────────────────┤
-│        Score < threshold?            │
-│        YES → Optimizer (LLM)        │
-│        NO  → Pass through           │
-└──────────────────────────────────────┘
+Application Created (POST /api/v1/applications)
+  │
+  ▼
+Check apply_mode setting:
+  │
+  ├── "autonomous" ──► Status: QUEUED ──► Enqueued immediately to Arq
+  ├── "review"     ──► Status: PENDING_REVIEW ──► Staged for single user approval
+  └── "batch"      ──► Status: PENDING_REVIEW ──► Staged for bulk approval
+                          │
+                          ▼
+             User clicks "Approve" (or "Bulk Approve")
+                          │
+                          ▼
+                   Status: APPROVED ──► Enqueued to Arq apply_to_job
+                          │
+                          ▼
+                  Arq Worker picks up task:
+                    1. Verifies pre-apply ATS threshold (score >= min_ats_score)
+                    2. Status: APPLYING (emits WebSocket progress)
+                    3. Runs browser apply agent (browser-use + Playwright)
+                    4. Status: APPLIED + records timestamp
+                    5. Enqueues harness review_application_run job
 ```
 
-### 5.4 LLM Layer (`core/llm/`)
-
+### 6.3 CAPTCHA/2FA Intervention Rendezvous
 ```
-Application Code
-       │
-       ▼
-┌──────────────────┐
-│  LLMClient       │  Unified interface
-│  (client.py)     │  - completion()
-│                  │  - acompletion()
-│                  │  - stream()
-├──────────────────┤
-│  Portkey Gateway │  Caching, fallbacks,
-│  (gateway.py)    │  load balancing,
-│                  │  observability
-├──────────────────┤
-│  LiteLLM         │  Provider abstraction
-│                  │  100+ providers
-├────────┬─────────┤
-│OpenAI  │ Groq    │ Gemini │ Local  │ OpenRouter │
-│gpt-4o  │ llama   │ gemini │ GGUF   │ any model  │
-└────────┴─────────┴────────┴────────┴────────────┘
-```
-
-**Provider Priority (configurable):**
-1. User's preferred provider (from settings)
-2. Portkey routes to best available
-3. Fallback chain: primary → secondary → local
-
-### 5.5 Queue System (`workers/`)
-
-```
-┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
-│  API/Service │────▶│   Redis Queue    │────▶│   Workers    │
-│  enqueue()   │     │                 │     │              │
-└──────────────┘     │  apply_queue    │     │  app_worker  │
-                     │  scrape_queue   │     │  scrape_wrkr │
-                     │  generate_queue │     │              │
-                     └─────────────────┘     └──────┬───────┘
-                                                    │
-                                              ┌─────▼─────┐
-                                              │ WebSocket  │
-                                              │ Progress   │
-                                              │ Updates    │
-                                              └───────────┘
+Worker Apply Agent hits challenge (CAPTCHA / 2FA)
+  │
+  ├─► Publishes "intervention_required" event to Redis pub/sub
+  │     └─► WebSocket forwards to Frontend -> Displays InterventionModal
+  │
+  ├─► Worker executes: BLPOP intervene:{application_id} (timeout 300s)
+  │     │
+  │     │ (Worker pauses execution, holding browser open)
+  │     │
+  │     └─► User enters verification code in UI
+  │           └─► POST /api/v1/applications/{id}/intervention
+  │                 └─► API executes: RPUSH intervene:{application_id}
+  │
+  └─► Worker unblocks, receives code, injects into browser, and resumes run
 ```
 
 ---
 
-## 6. Data Flow
+## 7. API Surface & Endpoint Contracts
 
-### 6.1 Job Search Flow
-```
-User enters search query in React UI
-  → POST /api/v1/jobs/search
-    → JobSearchService.search()
-      → PlatformRegistry.get_platforms(enabled_platforms)
-      → asyncio.gather(
-          linkedin.search(query),
-          indeed.search(query),
-          glassdoor.search(query)
-        )
-      → Each platform uses browser-use Agent to:
-          1. Navigate to search page
-          2. Fill search form
-          3. Extract job listings
-          4. Return structured JobListing[]
-      → Deduplicate results
-      → Store in DB
-      → Calculate match scores (FAISS similarity)
-    → Return paginated results to frontend
-  → Frontend renders JobList with JobCards
-```
+All routes are mounted under `/api/v1` except for `/health`, `/metrics`, and `/ws`:
 
-### 6.2 Application Flow (Configurable Mode)
-```
-User selects job(s) to apply
-  → POST /api/v1/applications (or /batch)
-    → ApplicationService.create_application()
-      → Check apply_mode from settings:
-
-        MODE: "autonomous"
-          → Enqueue to Redis apply_queue immediately
-
-        MODE: "review"
-          → Create application with status="pending_review"
-          → Return to frontend for user review
-          → User clicks "Approve" → enqueue
-
-        MODE: "batch"
-          → Create application with status="queued"
-          → User reviews batch → "Approve All" → enqueue all
-
-  Worker picks up from queue:
-    → Generate tailored resume (LLM)
-    → ATS score against JD
-    → If score < threshold: optimize (LLM) → re-score
-    → Generate cover letter (LLM)
-    → Render to PDF + DOCX
-    → browser-use Agent:
-        1. Navigate to job application page
-        2. Fill form fields
-        3. Upload resume
-        4. Submit application
-        5. Screenshot confirmation
-    → Update application status in DB
-    → WebSocket: notify frontend of completion
-```
-
-### 6.3 Resume Generation Flow
-```
-POST /api/v1/resumes/generate { job_id, template_id }
-  → ResumeService.generate()
-    → Parse base resume (parser.py)
-    → Fetch job details from DB
-    → LLMClient.completion(prompt=resume_tailor_prompt)
-      → Portkey Gateway → LiteLLM → Provider
-    → Render to PDF (WeasyPrint) + DOCX (python-docx)
-    → Store file paths in DB
-    → Return download URLs
-```
+| Method | Path | Auth Guard | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | Rate-limited | Create a new user account |
+| `POST` | `/api/v1/auth/login` | Rate-limited | OAuth2 password login, returns access token + sets refresh cookie |
+| `POST` | `/api/v1/auth/refresh` | Public (Cookie) | Rotates refresh token and issues new access token |
+| `POST` | `/api/v1/auth/logout` | Public (Cookie) | Revokes refresh token family and clears cookie |
+| `POST` | `/api/v1/auth/forgot-password`| Rate-limited | Sends password reset email (enumeration-safe) |
+| `POST` | `/api/v1/auth/reset-password` | Rate-limited | Redeems single-use token, resets password, revokes sessions |
+| `GET`  | `/api/v1/auth/me` | Bearer Token | Returns current authenticated user |
+| `GET`  | `/api/v1/auth/ws-ticket` | Bearer Token | Generates short-lived single-use WebSocket ticket |
+| `DELETE`| `/api/v1/auth/account` | Bearer Token | Soft-deletes user account (GDPR grace period) |
+| `POST` | `/api/v1/jobs/search` | Bearer + Rate | Cross-platform and semantic job search |
+| `GET`  | `/api/v1/jobs` | Bearer Token | Paginated job listings for tenant |
+| `GET`  | `/api/v1/jobs/{id}` | Bearer Token | Retrieve single job detail |
+| `POST` | `/api/v1/jobs/{id}/analyze` | Bearer Token | Multi-factor ATS match analysis against resume |
+| `DELETE`| `/api/v1/jobs/{id}` | Bearer Token | Delete job listing and associated applications |
+| `POST` | `/api/v1/applications` | Bearer + Rate | Create application and dispatch by apply mode |
+| `POST` | `/api/v1/applications/batch` | Bearer + Rate | Batch create applications |
+| `GET`  | `/api/v1/applications` | Bearer Token | List applications with pagination and status filters |
+| `POST` | `/api/v1/applications/bulk-approve`| Bearer Token| Approve and enqueue multiple staged applications |
+| `GET`  | `/api/v1/applications/{id}` | Bearer Token | Retrieve application detail |
+| `PUT`  | `/api/v1/applications/{id}/approve` | Bearer Token| Approve staged application for submission |
+| `POST` | `/api/v1/applications/{id}/cover-letter`| Bearer + Rate| Generate tailored cover letter |
+| `POST` | `/api/v1/applications/{id}/intervention`| Bearer Token| Resolve pending CAPTCHA/2FA prompt |
+| `PUT`  | `/api/v1/applications/{id}/status` | Bearer Token | Update application status and notes |
+| `POST` | `/api/v1/resumes/upload` | Bearer Token | Upload PDF/DOCX resume (max 10MB) |
+| `GET`  | `/api/v1/resumes` | Bearer Token | List all base and tailored resumes |
+| `POST` | `/api/v1/resumes/generate` | Bearer + Rate | Generate tailored resume using LLM |
+| `POST` | `/api/v1/resumes/{id}/score` | Bearer + Rate | Compute ATS score against job |
+| `POST` | `/api/v1/resumes/{id}/optimize` | Bearer + Rate | LLM rewrite to improve ATS match score |
+| `GET`  | `/api/v1/resumes/{id}/download` | Bearer Token | Materialize and stream PDF or DOCX file |
+| `GET`  | `/api/v1/resumes/{id}/profile-data`| Bearer Token| Extract structured profile fields from resume |
+| `GET`  | `/api/v1/analytics/dashboard` | Bearer Token | Top-level dashboard KPI statistics |
+| `GET`  | `/api/v1/analytics/funnel` | Bearer Token | Application stage funnel counts |
+| `GET`  | `/api/v1/analytics/ats-scores` | Bearer Token | ATS score distribution histogram |
+| `GET`  | `/api/v1/analytics/llm-usage` | Bearer Token | Per-provider/model token and cost tracking |
+| `GET`  | `/api/v1/analytics/timeline` | Bearer Token | 30-day activity timeline |
+| `GET`  | `/api/v1/settings` | Bearer Token | Retrieve user settings |
+| `PUT`  | `/api/v1/settings` | Bearer Token | Update apply mode, ATS threshold, platform toggles |
+| `GET`  | `/api/v1/settings/llm-providers` | Bearer Token| Status of configured LLM providers |
+| `POST` | `/api/v1/platform-sessions` | Bearer Token | Import encrypted platform browser storage state |
+| `GET`  | `/api/v1/platform-sessions` | Bearer Token | List connected platform sessions (metadata only) |
+| `DELETE`| `/api/v1/platform-sessions/{platform}`| Bearer Token| Remove stored session and cookies |
+| `GET`  | `/api/v1/admin/system-issues` | Superuser | List harness-detected system issues |
+| `WS`   | `/ws?ticket=...` | Ticket Guard | Real-time event and progress stream |
+| `GET`  | `/health` | Public | Readiness probe (checks DB and reports Redis status) |
+| `GET`  | `/metrics` | Public/Bearer | Prometheus metrics (token-protected in production) |
 
 ---
 
-## 7. API Contracts
+## 8. Data Models & Schemas
 
-### 7.1 Jobs
+The database schema comprises 13 SQLAlchemy 2.0 models:
 
-```
-POST   /api/v1/jobs/search
-  Body: { keywords: str[], location: str, platforms: str[], remote_only: bool }
-  Response: { jobs: JobListing[], total: int, page: int }
+```mermaid
+erDiagram
+    User ||--o{ RefreshToken : owns
+    User ||--o{ PasswordResetToken : owns
+    User ||--o{ UserCredential : owns
+    User ||--o| UserLLMConfig : owns
+    User ||--o| UserSettings : owns
+    User ||--o{ PlatformSession : owns
+    User ||--o{ Job : owns
+    User ||--o{ Resume : owns
+    User ||--o{ Application : owns
+    User ||--o{ LLMUsage : owns
+    User ||--o{ RunTrajectory : owns
+    User ||--o{ SystemIssue : relates
 
-GET    /api/v1/jobs?status=new&sort=match_score&page=1&limit=20
-GET    /api/v1/jobs/{id}
-POST   /api/v1/jobs/{id}/analyze
-DELETE /api/v1/jobs/{id}
-```
-
-### 7.2 Applications
-
-```
-POST   /api/v1/applications
-  Body: { job_id: str, resume_id: str, template_id: str, mode: "auto"|"review" }
-
-POST   /api/v1/applications/batch
-  Body: { job_ids: str[], resume_id: str, template_id: str }
-
-GET    /api/v1/applications?status=pending|applied|interview|rejected
-GET    /api/v1/applications/{id}
-PUT    /api/v1/applications/{id}/approve    # For review mode
-PUT    /api/v1/applications/{id}/status
+    Job ||--o{ Application : targets
+    Resume ||--o{ Application : uses
+    Resume ||--o{ Resume : tailored_from
+    RunTrajectory ||--o| RunVerdict : receives
+    RunTrajectory ||--o| RunDiagnosis : receives
+    DomainSkill ||--o{ SkillFeedback : collects
 ```
 
-### 7.3 Resumes
-
-```
-POST   /api/v1/resumes/upload              # Upload base resume
-  Body: multipart/form-data (file)
-
-GET    /api/v1/resumes                      # List all resumes
-POST   /api/v1/resumes/generate             # Generate tailored resume
-  Body: { job_id: str, template_id: str, base_resume_id: str }
-
-POST   /api/v1/resumes/{id}/score           # ATS score
-  Body: { job_description: str }
-
-POST   /api/v1/resumes/{id}/optimize        # Optimize for ATS
-GET    /api/v1/resumes/{id}/download?format=pdf|docx
-```
-
-### 7.4 Analytics
-
-```
-GET    /api/v1/analytics/dashboard          # Summary stats
-GET    /api/v1/analytics/funnel             # Application funnel
-GET    /api/v1/analytics/ats-scores         # Score distribution
-GET    /api/v1/analytics/llm-usage          # Token/cost tracking
-GET    /api/v1/analytics/timeline           # Applications over time
-```
-
-### 7.5 Settings
-
-```
-GET    /api/v1/settings
-PUT    /api/v1/settings
-  Body: {
-    apply_mode: "autonomous"|"review"|"batch",
-    max_parallel: 1-5,
-    min_ats_score: 0.0-1.0,
-    preferred_llm_provider: str,
-    platforms_enabled: str[]
-  }
-
-GET    /api/v1/settings/llm-providers       # Available providers + status
-PUT    /api/v1/settings/llm-providers       # Configure API keys
-```
-
-### 7.6 WebSocket
-
-```
-WS     /ws?ticket=…        # ticket-authenticated (GET /api/v1/auth/ws-ticket)
-  Messages (server → client):
-    { type: "application_progress", data: { id, step, status, screenshot_url } }
-    { type: "application_complete", data: { id, status, result } }
-    { type: "job_search_progress", data: { platform, found, total } }
-    { type: "generation_progress", data: { id, step, status } }
-    { type: "queue_update", data: { pending, processing, completed } }
-```
+### Model Summary
+1. **`User` (`users`):** Tenant root. Holds email, Argon2id hashed password, active/superuser flags, and `deleted_at`.
+2. **`RefreshToken` (`refresh_tokens`):** Stores SHA-256 token hash, `family_id` (UUID), `used` flag, `revoked` flag, and expiry.
+3. **`PasswordResetToken` (`password_reset_tokens`):** Stores single-use SHA-256 token hash, `used_at` timestamp, and expiry.
+4. **`UserCredential` (`user_credentials`):** Stores envelope-encrypted secrets (`llm_key`, `platform_cookies`) with associated `kek_id`.
+5. **`UserLLMConfig` (`user_llm_configs`):** Stores per-user LLM routing preferences (preferred provider, fallback providers, default model).
+6. **`UserSettings` (`user_settings`):** Stores user automation preferences (`apply_mode`, `max_parallel`, `min_ats_score`, `platforms_enabled`, `candidate_profile`).
+7. **`PlatformSession` (`platform_sessions`):** Browser session verification metadata (`fingerprint_hash`, `last_verified_at`, `expires_at`).
+8. **`Job` (`jobs`):** Discovered job listings. Unique on `(user_id, platform, platform_job_id)`.
+9. **`Application` (`applications`):** Application submissions. Enforces unique partial index `(user_id, job_id)` for non-terminal states.
+10. **`Resume` (`resumes`):** Base and tailored resumes. Stores storage keys for PDF/DOCX, ATS scores, and plain text.
+11. **`LLMUsage` (`llm_usage`):** Per-call token counts, cost in USD, latency in milliseconds, and purpose classification.
+12. **`RunTrajectory` (`run_trajectories`):** Execution step logs, screenshots, tokens, duration, and list of `skills_used`.
+13. **`RunVerdict`, `RunDiagnosis`, `DomainSkill`, `SkillFeedback`, `SystemIssue`:** Harness telemetry and knowledge storage.
 
 ---
 
-## 8. Data Models
+## 9. Infrastructure & Deployment
 
-### 8.1 SQLAlchemy Models
-
-```python
-class Job(Base):
-    __tablename__ = "jobs"
-    id: str                    # UUID
-    platform: str              # linkedin, indeed, glassdoor
-    platform_job_id: str       # Platform-specific ID
-    title: str
-    company: str
-    location: str
-    url: str
-    description: str
-    salary_range: str | None
-    job_type: str              # full-time, part-time, contract
-    remote: bool
-    posted_date: datetime
-    match_score: float         # Candidate match score
-    skills_required: JSON      # Extracted skills list
-    status: str                # new, saved, applied, hidden
-    created_at: datetime
-    updated_at: datetime
-
-class Application(Base):
-    __tablename__ = "applications"
-    id: str
-    job_id: str                # FK → jobs.id
-    resume_id: str             # FK → resumes.id
-    cover_letter_path: str
-    status: str                # queued, pending_review, applying, applied,
-                               # interview, rejected, offer, withdrawn
-    apply_mode: str            # autonomous, review, batch
-    ats_score: float
-    applied_at: datetime
-    response_date: datetime | None
-    notes: str
-    browser_screenshots: JSON  # List of screenshot paths
-    created_at: datetime
-
-class Resume(Base):
-    __tablename__ = "resumes"
-    id: str
-    name: str                  # User-friendly name
-    type: str                  # base, tailored
-    base_resume_id: str | None # FK → self (if tailored)
-    job_id: str | None         # FK → jobs.id (if tailored)
-    template_id: str
-    file_path_pdf: str
-    file_path_docx: str
-    ats_score: float | None
-    content_text: str          # Extracted text for search
-    created_at: datetime
-
-class LLMUsage(Base):
-    __tablename__ = "llm_usage"
-    id: str
-    provider: str
-    model: str
-    prompt_tokens: int
-    completion_tokens: int
-    cost_usd: float
-    latency_ms: int
-    purpose: str               # resume_tailor, cover_letter, ats_optimize, job_analysis
-    created_at: datetime
-
-class UserSettings(Base):
-    __tablename__ = "user_settings"
-    id: str
-    apply_mode: str
-    max_parallel: int
-    min_ats_score: float
-    preferred_provider: str
-    platforms_enabled: JSON
-    candidate_profile: JSON
-    created_at: datetime
-    updated_at: datetime
-```
+### Production Topology
+AutoApply AI deploys as an efficient, low-cost Docker Compose stack:
+- **API Container:** FastAPI served via Uvicorn.
+- **Worker Container:** Arq background worker running `app.workers.tasks.WorkerSettings`.
+- **Redis Container:** Redis 7 Alpine managing queue tasks, pub/sub event broadcasting, and rate-limiting counters.
+- **Managed Postgres:** Neon PostgreSQL (18+) with SSL enabled.
+- **Object Storage:** Cloudflare R2 (S3-compatible, zero egress fees) or mounted local storage volume.
+- **Reverse Proxy:** Caddy providing automated Let's Encrypt TLS certificates.
 
 ---
 
-## 9. Infrastructure
+## 10. Observability & Monitoring
 
-### 9.1 Docker Compose
-
-```yaml
-services:
-  backend:
-    build: ./docker/Dockerfile.backend
-    ports: ["8000:8000"]
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./templates:/app/templates
-    depends_on: [redis]
-
-  frontend:
-    build: ./docker/Dockerfile.frontend
-    ports: ["3000:80"]
-    depends_on: [backend]
-
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-    volumes:
-      - redis_data:/data
-
-  worker:
-    build: ./docker/Dockerfile.backend
-    command: arq app.workers.tasks.WorkerSettings
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-    depends_on: [redis, backend]
-
-volumes:
-  redis_data:
-```
-
-### 9.2 Environment Variables
-
-```env
-# Database
-DATABASE_URL=sqlite+aiosqlite:///data/db/autoapply.db
-REDIS_URL=redis://localhost:6379/0
-
-# LLM Providers
-LLM__PORTKEY_API_KEY=
-LLM__OPENAI_API_KEY=
-LLM__GROQ_API_KEY=
-LLM__GEMINI_API_KEY=
-LLM__OPENROUTER_API_KEY=
-LLM__GITHUB_TOKEN=
-
-# Browser
-BROWSER__HEADLESS=true
-BROWSER__MAX_PARALLEL=3
-
-# App
-APPLY_MODE=review          # autonomous, review, batch
-MIN_ATS_SCORE=0.75
-LOG_LEVEL=INFO
-```
+1. **Structured Logging:** Configured via `structlog`. Outputs JSON in staging/production with request context (`trace_id`, `user_id`, `path`).
+2. **Prometheus Metrics (`/metrics`):**
+   - In production, protected by constant-time bearer token authorization (`METRICS_TOKEN`).
+   - Tracks application volume, browser action durations, queue backlogs, LLM latency histograms, token counters, and USD spend.
+3. **Error Monitoring:** Sentry integrated into both FastAPI web handlers and background Arq tasks (activated via `SENTRY_DSN`).
+4. **Readiness Probe (`/health`):** Verifies live database connectivity via active query (`SELECT 1`, returns HTTP 503 if down) and reports Redis reachability.
 
 ---
 
-## 10. Observability
+## 11. Enterprise MVP Roadmap & Operational Guide
 
-### 10.1 Logging (Structlog)
-- JSON-formatted structured logs
-- Context-bound loggers per request
-- Log levels: DEBUG, INFO, WARNING, ERROR
+### Completed Production Capabilities
+- Multi-tenant tenant filtering with automated context injection (`do_orm_execute`).
+- Argon2id password authentication, rotating refresh cookies, reuse detection, and enumeration-safe password reset.
+- Complete job discovery pipeline with Exa AI semantic search.
+- Multi-factor ATS scoring and automated tailored document generation (PDF/DOCX).
+- ApplyMode dispatching (`autonomous`, `review`, `batch`) and bulk review operations.
+- Real-time WebSocket event streaming and CAPTCHA/2FA intervention handling.
+- Self-evolving harness with independent LLM judge, failure diagnosis, and PII-gated skill distillation.
+- Automated GDPR account purge and audit logging.
 
-### 10.2 Metrics (Prometheus)
-- `autoapply_applications_total{status, platform}` — counter
-- `autoapply_ats_score{template}` — histogram
-- `autoapply_llm_latency_seconds{provider, model}` — histogram
-- `autoapply_llm_tokens_total{provider, model, direction}` — counter
-- `autoapply_llm_cost_usd{provider, model}` — counter
-- `autoapply_browser_actions_total{platform, action}` — counter
-- `autoapply_queue_depth{queue}` — gauge
-
-### 10.3 LLM Tracing (Portkey built-in)
-- Per-call token usage and cost
-- Latency tracking
-- Request/response logging
-- Provider fallback events
-- Budget alerts
-
----
-
-## 11. Migration Plan
-
-### Phase 1: Foundation (Backend skeleton + cleanup)
-1. Delete obsolete files from current codebase
-2. Create new `backend/` directory structure
-3. Set up FastAPI app factory with config
-4. Migrate SQLAlchemy models (async)
-5. Set up Redis connection
-6. Implement health check endpoint
-
-### Phase 2: Core Modules
-1. Port ATS scorer to `core/ats/`
-2. Port document parser to `core/documents/`
-3. Implement LiteLLM + Portkey client in `core/llm/`
-4. Port FAISS vector store to `core/matching/`
-5. Build platform plugin system in `core/automation/`
-
-### Phase 3: API + Services
-1. Build all API routes with Pydantic schemas
-2. Implement service layer orchestration
-3. Set up Redis queue + workers
-4. Add WebSocket events
-
-### Phase 4: Browser Automation
-1. Implement browser-use Agent wrapper
-2. Build LinkedIn platform plugin
-3. Build Indeed platform plugin
-4. Build Glassdoor platform plugin
-5. Implement session management
-
-### Phase 5: Document Generation
-1. Create 5 HTML/CSS resume templates
-2. Implement WeasyPrint PDF renderer
-3. Implement DOCX renderer
-4. Build cover letter templates
-
-### Phase 6: Frontend
-1. React + Vite + MUI project setup
-2. Dashboard page
-3. Job search page
-4. Applications page
-5. Resume management page
-6. Settings page
-7. WebSocket integration
-
-### Phase 7: Observability + Deployment
-1. Structlog configuration
-2. Prometheus metrics
-3. Docker compose setup
-4. Cloud deployment config
+### Roadmap to Enterprise Release
+1. **Live Browser Spike Execution:** Validate real Chromium headful runs using `scripts/spike_apply.py` on an Xvfb-enabled worker host.
+2. **Platform Capture UX:** Build a frontend assisted-login flow allowing users to import browser `storage_state` files directly or capture sessions in an embedded browser.
+3. **Platform Posture & Rate Pacing:** Configure per-platform delays, human-like typing jitter, and residential proxy rotation before flipping `BROWSER__LIVE_APPLY=true`.
+4. **Production Email Verification:** Activate SMTP email verification on user registration.

@@ -60,3 +60,8 @@ export async function updateApplicationStatus(
   const { data } = await api.put<Application>(`/applications/${appId}/status`, update);
   return data;
 }
+
+/** Delete an application by ID. */
+export async function deleteApplication(appId: string): Promise<void> {
+  await api.delete(`/applications/${appId}`);
+}

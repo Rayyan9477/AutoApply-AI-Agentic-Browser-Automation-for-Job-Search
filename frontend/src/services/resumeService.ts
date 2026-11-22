@@ -23,6 +23,17 @@ export async function listResumes(): Promise<ResumeListResponse> {
   return data;
 }
 
+/** Get a single resume by ID. */
+export async function getResume(resumeId: string): Promise<Resume> {
+  const { data } = await api.get<Resume>(`/resumes/${resumeId}`);
+  return data;
+}
+
+/** Delete a resume by ID. */
+export async function deleteResume(resumeId: string): Promise<void> {
+  await api.delete(`/resumes/${resumeId}`);
+}
+
 /** Generate a job-tailored resume from a base resume. */
 export async function generateResume(request: ResumeGenerateRequest): Promise<Resume> {
   const { data } = await api.post<Resume>('/resumes/generate', request);

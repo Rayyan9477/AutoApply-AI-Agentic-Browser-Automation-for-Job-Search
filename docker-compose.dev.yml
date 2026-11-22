@@ -16,5 +16,6 @@ services:
     volumes:
       - ./backend:/app
       - ./data:/app/data
+      - ./templates:/app/templates
     environment:
       - ENVIRONMENT=development
