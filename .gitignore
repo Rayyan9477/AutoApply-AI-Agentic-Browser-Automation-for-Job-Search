@@ -17,6 +17,10 @@ env/
 .env
 .env.local
 .env.*.local
+# Real production env (holds live secrets). The *.example templates stay tracked.
+.env.prod
+.env.prod.local
+!.env.prod.example
 
 # IDE
 .idea/

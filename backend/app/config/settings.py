@@ -34,15 +34,23 @@ class LLMSettings(BaseSettings):
     gemini_api_key: SecretStr = SecretStr("")
     openrouter_api_key: SecretStr = SecretStr("")
     github_token: SecretStr = SecretStr("")
-    preferred_provider: str = "openai"
-    fallback_providers: list[str] = ["groq", "openrouter"]
-    default_model: str = "gpt-4o"
+    preferred_provider: str = "bedrock"
+    fallback_providers: list[str] = [
+        "mantle/openai.gpt-oss-120b",
+        "bedrock/google.gemma-3-27b-it",
+    ]
+    default_model: str = "bedrock/us.anthropic.claude-sonnet-4-6"
     temperature: float = 0.7
     max_tokens: int = 4096
     # AWS Bedrock: platform-authenticated via the standard AWS credential chain (env vars,
     # ~/.aws, or an instance/role) — no per-user key. Use a ``bedrock/<model-id>`` default_model
-    # (e.g. ``bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0``) to route through Bedrock.
+    # (e.g. ``bedrock/us.anthropic.claude-sonnet-4-6``) to route through Bedrock Converse.
     bedrock_region: str = "us-east-1"
+    # Bedrock Mantle — the OpenAI-compatible Bedrock endpoint exposing the wider model catalog
+    # (gpt-oss, DeepSeek, Qwen, GLM, Kimi, …). Set to e.g.
+    # ``https://bedrock-mantle.us-east-1.api.aws/v1`` to enable ``mantle/<model-id>`` models;
+    # auth is a short-term bearer token derived from the same AWS credential chain.
+    mantle_api_base: str = ""
 
     @field_validator("temperature")
     @classmethod
@@ -106,7 +114,7 @@ class EmailSettings(BaseSettings):
     from_address: str = "no-reply@autoapply.ai"
     from_name: str = "AutoApply AI"
     # Frontend origin used to build the reset link the user clicks.
-    frontend_base_url: str = "http://localhost:5173"
+    frontend_base_url: str = "http://localhost:3000"
     reset_token_expire_minutes: int = 30
 
     # SMTP transport (used when provider == "smtp").
@@ -182,9 +190,7 @@ class Settings(BaseSettings):
     # Job discovery
     exa_api_key: SecretStr = SecretStr("")
 
-    # Server
-    host: str = "0.0.0.0"
-    port: int = 8000
+    # Server (bind host/port live in the uvicorn CMD, not here)
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     @field_validator("min_ats_score")

@@ -33,6 +33,8 @@ dependencies = [
     # LLM abstraction layer
     "litellm>=1.40.0",
     "portkey-ai>=1.6.0",
+    # Short-term bearer tokens for the Bedrock Mantle (OpenAI-compatible) endpoint
+    "aws-bedrock-token-generator>=1.0.0",
 
     # Document generation
     "weasyprint>=62.0",

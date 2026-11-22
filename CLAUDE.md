@@ -8,7 +8,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up  # Dev mode wi
 
 ## Architecture
 - Backend: FastAPI (Python 3.11) at `backend/app/`
-- Frontend: React + MUI + TypeScript at `frontend/src/`
+- Frontend: React + Vite + TypeScript (inline styles + CSS-var design tokens; no component library) at `frontend/src/`
 - Queue: Redis for async job processing
 - Database: SQLite (default), PostgreSQL optional
 

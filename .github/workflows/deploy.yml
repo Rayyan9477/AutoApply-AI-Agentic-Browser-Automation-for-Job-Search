@@ -1,0 +1,26 @@
+name: Deploy (reference, manual)
+
+# Reference pipeline for the Hetzner VPS target. Opt-in only (workflow_dispatch) and inert
+# until you add the required repo secrets (DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY).
+# Builds on the box (matches deploy/bootstrap.sh + RUNBOOK) so no registry is needed — the
+# cheapest, self-consistent path. (To use GHCR images instead, push them here and add matching
+# `image:` keys to docker-compose.prod.yml so `pull` consumes them.)
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH (git pull + build + migrate + restart)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ~/autoapply
+            git pull --ff-only
+            docker compose -f docker-compose.prod.yml build
+            docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+            docker compose -f docker-compose.prod.yml up -d

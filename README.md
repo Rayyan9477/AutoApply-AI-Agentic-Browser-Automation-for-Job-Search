@@ -21,7 +21,7 @@ AutoApply AI is a full-stack platform that automates and manages the modern job 
 ## Architecture
 
 ```
-Frontend (React + MUI + Vite)
+Frontend (React 18 + Vite + TypeScript)
   |
   REST API + WebSocket
   |
@@ -34,9 +34,9 @@ Backend (FastAPI)
 ```
 
 - **Backend:** FastAPI, SQLAlchemy 2.0 async, Pydantic v2, Redis, structlog, Prometheus
-- **Frontend:** React 18, TypeScript, Vite, MUI, TanStack Query, Zustand, Recharts
+- **Frontend:** React 18, TypeScript, Vite — custom design-token UI (CSS variables + inline styles, no component library), TanStack Query, Zustand, Recharts
 - **Automation:** browser-use + Playwright for platform workflows
-- **AI:** LiteLLM + Portkey gateway with OpenAI, Groq, Gemini, OpenRouter support
+- **AI:** AWS Bedrock via LiteLLM (default `bedrock/us.anthropic.claude-sonnet-4-6`), with the Bedrock Mantle OpenAI-compatible endpoint for the wider catalog and fallbacks; per-user BYO keys (OpenAI, Groq, Gemini, OpenRouter) remain an alternative
 - **Data:** SQLite (default) or PostgreSQL, Redis queue/cache, FAISS vector indices
 
 For a full breakdown, see [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -81,7 +81,7 @@ npm run dev
 
 ```bash
 cd backend
-python -m app.workers.application_worker
+arq app.workers.tasks.WorkerSettings
 ```
 
 ### Default Services
@@ -97,20 +97,25 @@ python -m app.workers.application_worker
 
 ## Configuration
 
-Copy `.env.example` to `.env` and set at least one LLM provider key:
+Copy `.env.example` to `.env`. The platform LLM is AWS Bedrock, authenticated via the standard
+AWS credential chain (env vars, `~/.aws`, or an instance role) — no API key is stored per user.
+Per-user BYO keys (OpenAI, Groq, Gemini, OpenRouter — entered in Settings, encrypted at rest)
+remain a supported alternative.
 
 ```env
 # Database
 DATABASE_URL=sqlite+aiosqlite:///data/db/autoapply.db
 REDIS_URL=redis://localhost:6379/0
 
-# LLM (set at least one)
-LLM__PREFERRED_PROVIDER=openai
-LLM__DEFAULT_MODEL=gpt-4o
-LLM__OPENAI_API_KEY=
-LLM__GROQ_API_KEY=
-LLM__OPENROUTER_API_KEY=
-LLM__GEMINI_API_KEY=
+# LLM — AWS Bedrock (recommended)
+LLM__PREFERRED_PROVIDER=bedrock
+LLM__DEFAULT_MODEL=bedrock/us.anthropic.claude-sonnet-4-6
+LLM__BEDROCK_REGION=us-east-1
+# Bedrock Mantle — OpenAI-compatible Bedrock endpoint (bearer token self-generated from AWS creds)
+LLM__MANTLE_API_BASE=https://bedrock-mantle.us-east-1.api.aws/v1
+LLM__FALLBACK_PROVIDERS=["mantle/openai.gpt-oss-120b","bedrock/google.gemma-3-27b-it"]
+AWS_ACCESS_KEY_ID=            # or leave blank to use ~/.aws / an instance role
+AWS_SECRET_ACCESS_KEY=
 
 # Application
 APPLY_MODE=review              # autonomous | review | batch
@@ -132,10 +137,20 @@ BROWSER__MAX_PARALLEL=3
 
 ## API Surface
 
-All routes are under `/api/v1`:
+All routes are under `/api/v1` (auth routes are public; everything else requires a JWT):
 
 ```
-POST   /api/v1/jobs/search              # Multi-platform job search
+POST   /api/v1/auth/register             # Create account
+POST   /api/v1/auth/login                # OAuth2 password login -> access token
+POST   /api/v1/auth/refresh              # Rotate refresh token (httpOnly cookie)
+POST   /api/v1/auth/logout               # Revoke session
+POST   /api/v1/auth/forgot-password      # Request password-reset email
+POST   /api/v1/auth/reset-password       # Redeem reset token, set new password
+GET    /api/v1/auth/me                   # Current user
+GET    /api/v1/auth/ws-ticket            # Short-lived WebSocket ticket
+DELETE /api/v1/auth/account              # Soft-delete account
+
+POST   /api/v1/jobs/search               # Multi-platform job search
 GET    /api/v1/jobs                      # List jobs (paginated)
 GET    /api/v1/jobs/{id}                 # Get job details
 POST   /api/v1/jobs/{id}/analyze         # ATS match analysis
@@ -144,13 +159,18 @@ DELETE /api/v1/jobs/{id}                 # Delete job
 POST   /api/v1/applications              # Create application
 POST   /api/v1/applications/batch        # Batch create
 GET    /api/v1/applications              # List applications
+GET    /api/v1/applications/{id}         # Get application detail
 PUT    /api/v1/applications/{id}/approve  # Approve for submission
+POST   /api/v1/applications/bulk-approve  # Approve many at once
 PUT    /api/v1/applications/{id}/status   # Update status
+POST   /api/v1/applications/{id}/cover-letter  # Generate cover letter
+POST   /api/v1/applications/{id}/intervention  # Answer CAPTCHA/2FA prompt
 
 POST   /api/v1/resumes/upload            # Upload resume (PDF/DOCX)
 GET    /api/v1/resumes                   # List resumes
 POST   /api/v1/resumes/generate          # Generate tailored resume
 POST   /api/v1/resumes/{id}/score        # ATS score against job
+POST   /api/v1/resumes/{id}/optimize     # ATS-optimize a resume
 GET    /api/v1/resumes/{id}/download     # Download as PDF or DOCX
 
 GET    /api/v1/analytics/dashboard       # Dashboard stats
@@ -163,8 +183,14 @@ GET    /api/v1/settings                  # Get settings
 PUT    /api/v1/settings                  # Update settings
 GET    /api/v1/settings/llm-providers    # Provider status
 
-WS     /ws                              # Real-time event stream
-GET    /health                           # Health check
+POST   /api/v1/platform-sessions         # Import a captured platform session (encrypted)
+GET    /api/v1/platform-sessions         # List connected platforms (no cookies returned)
+DELETE /api/v1/platform-sessions/{platform}  # Disconnect a platform
+
+GET    /api/v1/admin/system-issues       # Harness-detected issues (superuser only)
+
+WS     /ws?ticket=...                    # Real-time event stream (ticket-authenticated)
+GET    /health                           # Health check (real readiness probe)
 ```
 
 ## Repository Layout
@@ -177,7 +203,7 @@ backend/app/
   models/         # SQLAlchemy models (Job, Application, Resume, LLMUsage, UserSettings)
   schemas/        # Pydantic request/response schemas
   db/             # Database session + Redis + Alembic migrations
-  workers/        # Background queue workers
+  workers/        # Arq background workers (tasks.py)
   observability/  # Structlog + Prometheus metrics
 
 frontend/src/
@@ -191,7 +217,8 @@ frontend/src/
 templates/        # Resume and cover letter HTML/CSS templates
 data/             # Runtime data (gitignored): db, uploads, sessions, vector indices, logs
 docker/           # Dockerfiles + nginx config
-docs/             # API docs, integration plan, tools reference
+docs/             # Setup breadcrumbs, bug log, design prompt
+deploy/           # Production runbook, credentials checklist, bootstrap script
 ```
 
 ## Development Commands
@@ -211,26 +238,25 @@ npm run build                       # Production build
 
 ## Current Status
 
-### Working
+### Shipped
 
-- FastAPI backend with versioned API routes and OpenAPI docs
-- React + MUI dashboard with jobs, applications, resumes, analytics, and settings pages
-- Application tracking CRUD with approval flow and status lifecycle
-- Resume upload with real parsing (PDF/DOCX), skill extraction, and ATS scoring
-- Multi-factor ATS scoring engine (skills, keywords, experience, education)
-- Analytics endpoints (dashboard stats, funnel, ATS distribution, LLM usage, timeline)
-- Redis worker scaffolding and WebSocket progress events
-- LLM client with provider fallback chain and Prometheus metrics
-- Exa AI semantic job search integration
-- Dockerized local environment (backend, frontend, worker, Redis)
-- 30+ unit tests and integration tests
+- Multi-tenant auth: register/login with JWT access + rotating refresh tokens, and a full
+  password-reset flow (forgot + reset screens, pluggable log/smtp mailer)
+- Job search across platforms + Exa semantic search, with ATS match analysis per job
+- Resume upload/parse, tailored generation, ATS scoring, and one-click optimization
+- Applications pipeline: create/batch, review/approve (incl. bulk approve), cover-letter
+  generation, CAPTCHA/2FA intervention endpoint, and live status over WebSocket
+- Analytics (dashboard stats, funnel, ATS distribution, LLM usage, timeline)
+- Admin system-health view backed by the self-evolving harness (superuser only)
+- Platform session-import API (`/api/v1/platform-sessions`) — per-user, encrypted at rest
+- Arq worker + Redis pub/sub event bus; AWS Bedrock LLM with fallback chain
+- 660+ backend tests and 133 frontend tests
 
 ### In Progress
 
-- Live platform search execution (LinkedIn, Indeed, Glassdoor scrapers)
-- Fully automated browser-based application submission
-- LLM-powered resume generation and cover letter pipeline
-- Persistent settings and provider health checks
+- Live browser-based application submission is gated behind `BROWSER__LIVE_APPLY=false`
+  awaiting the real-browser (headful) spike: assisted-login capture UX, anti-bot posture,
+  and platform flow validation on a headful browser host
 
 ## Responsible Use
 
@@ -245,9 +271,8 @@ This project touches hiring workflows, personal data, and platform automation.
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) -- system architecture and data flows
-- [docs/API.md](docs/API.md) -- API reference
-- [docs/INTEGRATION_PLAN.md](docs/INTEGRATION_PLAN.md) -- integration roadmap
-- [docs/TOOLS.md](docs/TOOLS.md) -- tooling reference
+- [docs/SETUP_AND_BREADCRUMBS.md](docs/SETUP_AND_BREADCRUMBS.md) -- current operational reality and setup checklist
+- [deploy/RUNBOOK.md](deploy/RUNBOOK.md) -- production deployment runbook
 
 ## Adding a New Platform
 

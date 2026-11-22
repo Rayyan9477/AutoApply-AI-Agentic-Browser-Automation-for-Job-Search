@@ -1,5 +1,9 @@
 # AutoApply AI — System Architecture v2.0
 
+> **NOTE (2026-07):** sections of this document predate the multi-tenant re-architecture; where it
+> conflicts with the code or README, the code wins. See `docs/SETUP_AND_BREADCRUMBS.md` for current
+> operational reality.
+
 ## Table of Contents
 1. [High-Level Architecture](#1-high-level-architecture)
 2. [Project Structure](#2-project-structure)
@@ -174,7 +178,7 @@ AutoApply-AI-Smart-Job-Application-Assistant/
 │   │   │   └── migrations/           # Alembic migrations
 │   │   │
 │   │   ├── workers/                  # Background task workers
-│   │   │   └── application_worker.py # Processes application queue
+│   │   │   └── tasks.py              # Arq worker (run: arq app.workers.tasks.WorkerSettings)
 │   │   │
 │   │   └── observability/            # Monitoring & logging
 │   │       ├── logging.py            # Structlog configuration
@@ -190,7 +194,7 @@ AutoApply-AI-Smart-Job-Application-Assistant/
 │   ├── alembic.ini
 │   └── pyproject.toml
 │
-├── frontend/                         # React + MUI + Vite
+├── frontend/                         # React + Vite + TypeScript
 │   ├── src/
 │   │   ├── main.tsx
 │   │   ├── App.tsx
@@ -258,9 +262,9 @@ AutoApply-AI-Smart-Job-Application-Assistant/
 │   └── logs/                         # Application logs
 │
 ├── docs/                             # Additional documentation
-│   ├── API.md
-│   ├── INTEGRATION_PLAN.md
-│   └── TOOLS.md
+│   ├── SETUP_AND_BREADCRUMBS.md
+│   ├── BUG_LOG.md
+│   └── FRONTEND_DESIGN_PROMPT.md
 │
 ├── .env.example                      # Environment variable template
 ├── CLAUDE.md                         # Project conventions for AI
@@ -333,7 +337,7 @@ All I/O operations are async:
 ### 4.1 Tech Stack
 - **React 18** with TypeScript
 - **Vite** for build tooling
-- **MUI v5** component library
+- **Custom design-token UI** (CSS variables + inline styles; no component library)
 - **Zustand** for state management (lightweight, no boilerplate)
 - **React Router v6** for routing
 - **Axios** for API calls
@@ -671,7 +675,7 @@ PUT    /api/v1/settings/llm-providers       # Configure API keys
 ### 7.6 WebSocket
 
 ```
-WS     /ws/events
+WS     /ws?ticket=…        # ticket-authenticated (GET /api/v1/auth/ws-ticket)
   Messages (server → client):
     { type: "application_progress", data: { id, step, status, screenshot_url } }
     { type: "application_complete", data: { id, status, result } }
@@ -792,7 +796,7 @@ services:
 
   worker:
     build: ./docker/Dockerfile.backend
-    command: python -m app.workers.application_worker
+    command: arq app.workers.tasks.WorkerSettings
     env_file: .env
     volumes:
       - ./data:/app/data
@@ -810,16 +814,16 @@ DATABASE_URL=sqlite+aiosqlite:///data/db/autoapply.db
 REDIS_URL=redis://localhost:6379/0
 
 # LLM Providers
-PORTKEY_API_KEY=
-OPENAI_API_KEY=
-GROQ_API_KEY=
-GEMINI_API_KEY=
-OPENROUTER_API_KEY=
-GITHUB_TOKEN=
+LLM__PORTKEY_API_KEY=
+LLM__OPENAI_API_KEY=
+LLM__GROQ_API_KEY=
+LLM__GEMINI_API_KEY=
+LLM__OPENROUTER_API_KEY=
+LLM__GITHUB_TOKEN=
 
 # Browser
-BROWSER_HEADLESS=true
-BROWSER_MAX_PARALLEL=3
+BROWSER__HEADLESS=true
+BROWSER__MAX_PARALLEL=3
 
 # App
 APPLY_MODE=review          # autonomous, review, batch

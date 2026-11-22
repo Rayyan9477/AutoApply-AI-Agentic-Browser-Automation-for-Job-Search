@@ -1,6 +1,9 @@
-"""Browser automation: AI-driven agents, session management, and platform integrations."""
+"""Browser automation: AI-driven agents and platform integrations.
+
+Platform session persistence lives in the encrypted CredentialStore
+(``app/core/secrets/credential_store.py``) via the platform-sessions API.
+"""
 
 from app.core.automation.agent import BrowserAgent
-from app.core.automation.session_manager import SessionManager
 
-__all__ = ["BrowserAgent", "SessionManager"]
+__all__ = ["BrowserAgent"]
