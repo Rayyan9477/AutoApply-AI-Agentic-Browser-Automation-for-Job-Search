@@ -23,6 +23,19 @@ _EDUCATION_LEVELS: dict[str, int] = {
     "master": 4, "phd": 5, "doctorate": 5,
 }
 
+# Abbreviated degrees ("B.S.", "MSc", "Ph.D.") carry no spelled-out level word. Bare
+# fragments ("bs", "ms") are deliberately NOT ranked: the requirement regex below can emit
+# them from ordinary words ("jobs", "systems").
+_DEGREE_ABBREVIATIONS: list[tuple[re.Pattern[str], int]] = [
+    (re.compile(r"(?<![a-z])(?:ph\.d|d\.phil)(?![a-z])"), 5),
+    (re.compile(r"(?<![a-z])(?:m\.s\.|m\.sc|msc|m\.a\.|mba|m\.eng)(?![a-z])"), 4),
+    (re.compile(r"(?<![a-z])(?:b\.s\.|b\.sc|bsc|b\.a\.|b\.eng|b\.tech)(?![a-z])"), 3),
+]
+
+NO_EXPERIENCE_SUGGESTION = (
+    "Add dated work experience (e.g. 'Jan 2020 \u2013 Mar 2023') so it can be scored."
+)
+
 _EDUCATION_PATTERNS: list[str] = [
     r"(?:bachelor|bs|ba|b\.s\.|b\.a\.)\s*(?:degree|'s)?",
     r"(?:master|ms|ma|m\.s\.|m\.a\.)\s*(?:degree|'s)?",
@@ -121,26 +134,37 @@ class ResumeScorer:
         keyword_score, keyword_matches = self._keyword_analyzer.analyze_keywords(
             resume_text, job_description,
         )
-        exp_score, exp_matches = self._experience_analyzer.analyze_experience(
-            candidate_profile.get("experience", []),
-            job_description, job_metadata,
-        )
+        experience = candidate_profile.get("experience") or []
+        if experience:
+            exp_score, exp_matches = self._experience_analyzer.analyze_experience(
+                experience, job_description, job_metadata,
+            )
+        else:
+            # Nothing dated to score: exclude the factor instead of scoring it 0, which
+            # would silently cap the overall score at (1 - experience weight).
+            exp_score, exp_matches = 0.0, []
         edu_score, edu_matches = self._score_education(
             candidate_profile.get("education", []),
             job_description, job_metadata,
         )
 
         w = self._weights
-        overall = (
-            w.skills * skill_score + w.experience * exp_score
-            + w.education * edu_score + w.keywords * keyword_score
+        weighted = (
+            w.skills * skill_score + w.education * edu_score + w.keywords * keyword_score
         )
+        if experience:
+            overall = weighted + w.experience * exp_score
+        else:
+            remaining = w.skills + w.education + w.keywords
+            overall = weighted / remaining if remaining > 0 else 0.0
         overall = min(max(overall, 0.0), 1.0)
 
         suggestions = self._generate_suggestions(
-            skill_score, exp_score, edu_score, keyword_score,
+            skill_score, exp_score if experience else None, edu_score, keyword_score,
             missing_req, missing_pref,
         )
+        if not experience:
+            suggestions.append(NO_EXPERIENCE_SUGGESTION)
 
         details = ScoreDetails(
             overall_score=round(overall, 4),
@@ -247,14 +271,17 @@ class ResumeScorer:
         for level, rank in _EDUCATION_LEVELS.items():
             if level in lower:
                 return rank
+        for pattern, rank in _DEGREE_ABBREVIATIONS:
+            if pattern.search(lower):
+                return rank
         return 0
 
     def _generate_suggestions(
-        self, skill_score: float, exp_score: float,
+        self, skill_score: float, exp_score: float | None,
         edu_score: float, kw_score: float,
         missing_req: list[str], missing_pref: list[str],
     ) -> list[str]:
-        """Generate actionable improvement suggestions."""
+        """Generate actionable improvement suggestions (``exp_score`` None = not scored)."""
         suggestions: list[str] = []
         if missing_req:
             suggestions.append(
@@ -268,7 +295,7 @@ class ResumeScorer:
             suggestions.append(
                 "Increase keyword alignment by mirroring terminology from the job description."
             )
-        if exp_score < 0.5:
+        if exp_score is not None and exp_score < 0.5:
             suggestions.append(
                 "Strengthen experience descriptions by quantifying achievements "
                 "and aligning responsibilities with job requirements."

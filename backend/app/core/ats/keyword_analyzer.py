@@ -85,6 +85,11 @@ class KeywordAnalyzer:
         - Semantic similarity (30%)
         - Phrase match ratio (30%)
 
+        When semantic similarity is unavailable (either doc has no vector, or the
+        pipeline ships no static word vectors, e.g. ``en_core_web_sm``), its 30% is
+        excluded and the rest renormalized: ``(0.4*tfidf + 0.3*phrase) / 0.7``.
+        Scoring it as 0 would silently cap every score at 0.7.
+
         Args:
             resume_text: Full text of the candidate resume.
             job_description: Full text of the job posting.
@@ -107,16 +112,19 @@ class KeywordAnalyzer:
         tfidf_score, per_keyword = self._tfidf_overlap(
             resume_keywords, job_keywords, resume_text,
         )
-        semantic_score = self._semantic_similarity(resume_text, job_description)
+        semantic_score = self._vector_similarity(resume_text, job_description)
         phrase_score = self._phrase_match_score(resume_text, job_description)
 
-        overall = (0.4 * tfidf_score) + (0.3 * semantic_score) + (0.3 * phrase_score)
+        if semantic_score is None:
+            overall = ((0.4 * tfidf_score) + (0.3 * phrase_score)) / 0.7
+        else:
+            overall = (0.4 * tfidf_score) + (0.3 * semantic_score) + (0.3 * phrase_score)
         overall = min(max(overall, 0.0), 1.0)
 
         logger.debug(
             "keyword_analyzer.scores",
             tfidf=round(tfidf_score, 3),
-            semantic=round(semantic_score, 3),
+            semantic=None if semantic_score is None else round(semantic_score, 3),
             phrase=round(phrase_score, 3),
             overall=round(overall, 3),
         )
@@ -157,6 +165,9 @@ class KeywordAnalyzer:
         """Calculate TF-IDF-weighted overlap between keyword sets."""
         job_freq = Counter(job_keywords)
         resume_lower = resume_text.lower()
+        # Keywords are lemmas ("build"); match them against the resume's lemmas too, so an
+        # inflected surface form ("built") is not scored as missing.
+        resume_terms = set(resume_keywords)
         total_job_kw = len(job_freq)
         if total_job_kw == 0:
             return 0.0, {}
@@ -168,7 +179,7 @@ class KeywordAnalyzer:
         for keyword, count in job_freq.items():
             weight = 1.0 + math.log(1 + count)
             total_weight += weight
-            if keyword in resume_lower:
+            if keyword in resume_terms or keyword in resume_lower:
                 per_keyword[keyword] = min(weight / (1.0 + math.log(1 + total_job_kw)), 1.0)
                 matched_weight += weight
             else:
@@ -178,13 +189,31 @@ class KeywordAnalyzer:
         return min(score, 1.0), per_keyword
 
     def _semantic_similarity(self, resume_text: str, job_description: str) -> float:
-        """Calculate spaCy document-level semantic similarity."""
+        """Calculate spaCy document-level semantic similarity (0.0 when unavailable)."""
+        sim = self._vector_similarity(resume_text, job_description)
+        return 0.0 if sim is None else sim
+
+    def _vector_similarity(self, resume_text: str, job_description: str) -> float | None:
+        """Word-vector similarity, or ``None`` when there are no vectors to compare.
+
+        A pipeline without static vectors (``en_core_web_sm``) still reports
+        ``has_vector`` via its context tensors, but spaCy warns (W007) that tensor
+        similarity is not semantic -- unrelated texts score ~0.8 -- so it is treated
+        as unavailable rather than trusted.
+        """
+        if not self._has_static_vectors():
+            return None
         resume_doc = self._nlp(resume_text[:10_000])  # cap length for performance
         job_doc = self._nlp(job_description[:10_000])
         if not resume_doc.has_vector or not job_doc.has_vector:
-            return 0.0
-        sim = float(resume_doc.similarity(job_doc))
-        return max(sim, 0.0)
+            return None
+        return max(float(resume_doc.similarity(job_doc)), 0.0)
+
+    def _has_static_vectors(self) -> bool:
+        """False only when the pipeline verifiably ships an empty static-vector table."""
+        vectors = getattr(getattr(self._nlp, "vocab", None), "vectors", None)
+        size = getattr(vectors, "size", None)
+        return not (isinstance(size, int) and size == 0)
 
     def _phrase_match_score(self, resume_text: str, job_description: str) -> float:
         """Score based on multi-word phrase matches from the job description."""

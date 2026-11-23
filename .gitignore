@@ -33,6 +33,7 @@ env/
 .claude/
 
 # Data (runtime generated)
+backend/data/storage/
 data/db/*.db
 data/sessions/*
 !data/sessions/.gitkeep

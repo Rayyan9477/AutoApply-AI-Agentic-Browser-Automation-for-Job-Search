@@ -2,6 +2,7 @@
 
 import structlog
 from fastapi import APIRouter, Depends
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,17 +11,20 @@ from app.api.deps import CurrentUser, get_tenant_db
 from app.config.settings import get_settings as get_app_settings
 from app.models.user_settings import UserSettings
 from app.schemas.settings import LLMProviderStatus, SettingsResponse, SettingsUpdate
+from app.services.user_prefs import get_user_settings
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
 async def _get_or_create_settings(db: AsyncSession, user_id: str) -> UserSettings:
-    """Return the user's settings row, creating defaults if absent."""
-    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
-    settings = result.scalar_one_or_none()
-    if settings is None:
-        settings = UserSettings(user_id=user_id)
+    """Return the user's settings row, persisting the defaults if absent.
+
+    Reads through :func:`get_user_settings`, so the API and the apply pipeline agree on
+    what a user who never saved settings gets.
+    """
+    settings = await get_user_settings(db, user_id)
+    if sa_inspect(settings).transient:
         db.add(settings)
         try:
             await db.commit()

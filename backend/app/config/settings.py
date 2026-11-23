@@ -82,6 +82,9 @@ class BrowserSettings(BaseSettings):
     # demoable/CI-safe. Set True (with a real browser + assisted-login session) to drive
     # the live browser-use apply (run_apply).
     live_apply: bool = False
+    # How long the apply agent's ``request_human_help`` tool waits for the user to answer a
+    # CAPTCHA/2FA prompt before giving up (seconds).
+    intervention_timeout_s: int = 300
 
     @field_validator("max_parallel")
     @classmethod

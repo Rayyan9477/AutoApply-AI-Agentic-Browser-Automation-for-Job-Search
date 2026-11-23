@@ -2,7 +2,7 @@
 
 import structlog
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,16 +35,26 @@ _COSTLY = Depends(rate_limit(30, 60))
 @router.post(
     "/", response_model=ApplicationResponse, status_code=201, dependencies=[_COSTLY],
     summary="Create an application",
+    responses={200: {"description": "An active application already existed; returned unchanged"}},
 )
 async def create_application(
     data: ApplicationCreate,
     user: CurrentUser,
+    response: Response,
     db: AsyncSession = Depends(get_tenant_db),
     pool: ArqRedis | None = Depends(get_arq_pool),
 ) -> ApplicationResponse:
-    """Create a single job application and dispatch it according to apply_mode."""
-    app = await app_service.create_application(db, data, user.id)
-    await dispatch.dispatch_for_mode(db, pool, app)
+    """Create a single job application and dispatch it according to apply_mode.
+
+    Returns ``201`` for a new application. If the job already has an active application,
+    that row is returned as-is with ``200``: it is not re-dispatched and its status is
+    not reset (a double click must not restart an in-flight or finished apply).
+    """
+    app, created = await app_service.create_application(db, data, user.id)
+    if created:
+        await dispatch.dispatch_for_mode(db, pool, app)
+    else:
+        response.status_code = 200
     return app_service.application_to_response(app)
 
 
@@ -168,3 +178,16 @@ async def update_status(
     """Update an application's status and optional notes."""
     app = await app_service.update_status(db, app_id, update)
     return app_service.application_to_response(app)
+
+
+@router.delete(
+    "/{app_id}",
+    status_code=204,
+    summary="Delete an application",
+)
+async def delete_application(
+    app_id: str,
+    db: AsyncSession = Depends(get_tenant_db),
+) -> None:
+    """Delete an application record."""
+    await app_service.delete_application(db, app_id)

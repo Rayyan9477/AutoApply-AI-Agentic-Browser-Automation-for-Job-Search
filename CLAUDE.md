@@ -47,7 +47,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up  # Dev mode wi
   - Credentials: Never log or store raw secrets; always use `CredentialStore`.
 - **TypeScript:** strict mode, zero `any`, TanStack Query for server state caching, Zustand for UI state.
   - Design Tokens: Use `var(--...)` tokens defined in `theme.css`. Do NOT install or introduce external component libraries.
-- **File Length:** Target max 300 lines per file.
+- **File Length:** Target max 400–500 lines per file for focused services; break down files only when responsibilities naturally bifurcate.
 - **Naming:** snake_case (Python), PascalCase components / camelCase hooks (TypeScript).
 
 ## Adding a New Platform

@@ -90,6 +90,34 @@ async def list_resumes(
     return await resume_service.list_resumes(db)
 
 
+@router.get(
+    "/{resume_id}",
+    response_model=ResumeResponse,
+    summary="Get resume details",
+)
+async def get_resume(
+    resume_id: str,
+    db: AsyncSession = Depends(get_tenant_db),
+) -> ResumeResponse:
+    """Get metadata and details for a single resume."""
+    resume = await resume_service.get_resume(db, resume_id)
+    return ResumeResponse.model_validate(resume)
+
+
+@router.delete(
+    "/{resume_id}",
+    status_code=204,
+    summary="Delete a resume",
+)
+async def delete_resume(
+    resume_id: str,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_tenant_db),
+) -> None:
+    """Delete a resume document and its stored files."""
+    await resume_service.delete_resume(db, resume_id, user.id)
+
+
 @router.post(
     "/generate",
     response_model=ResumeResponse,
