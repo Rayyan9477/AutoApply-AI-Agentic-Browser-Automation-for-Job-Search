@@ -143,7 +143,7 @@ AutoApply-AI-Agentic-Browser-Automation-for-Job-Search/
 │   │   │   │   ├── optimizer.py        # Gap identification & prompt construction
 │   │   │   │   └── nlp.py              # Process-cached spaCy en_core_web_sm pipeline
 │   │   │   ├── documents/              # Document generation & parsing
-│   │   │   │   ├── parser.py           # PyPDF2 and python-docx text & contact extraction
+│   │   │   │   ├── parser.py           # pypdf and python-docx text & contact extraction
 │   │   │   │   ├── generator.py        # Orchestrates LLM tailoring + parallel PDF/DOCX render
 │   │   │   │   ├── pdf_renderer.py     # HTML + CSS to PDF via WeasyPrint
 │   │   │   │   └── docx_renderer.py    # Word document generator via python-docx
@@ -228,20 +228,14 @@ The backend follows strict domain-driven, layered boundaries:
 - **Core Domain Modules (`app/core/`):** Pure domain logic independent of HTTP contexts (e.g., scoring algorithms, WeasyPrint renderers, Playwright wrappers, LLM callers, encryption routines).
 - **Persistence & Infrastructure (`app/db/`, `app/models/`):** SQLAlchemy 2.0 async engine, Redis connection pools, Arq background workers, and S3-compatible object storage.
 
-### 3.2 Multi-Tenant Data Isolation
+### 3.2 Multi-Tenant Data Isolation (Fail-Closed)
 To ensure strict enterprise-grade data boundaries and eliminate Insecure Direct Object Reference (IDOR) vulnerabilities:
 - **`TenantMixin`:** Abstract model base adding an indexed `user_id` foreign key referencing `users.id` with `ondelete="CASCADE"`.
-- **Ambient SQL Filter Hook (`app/db/tenant.py`):**
-  ```python
-  @event.listens_for(AsyncSession.sync_session_class, "do_orm_execute")
-  def _apply_tenant_filter(state: ORMExecuteState) -> None:
-      uid = current_user_id.get()
-      if uid is not None and state.is_select and not state.execution_options.get("skip_tenant_filter", False):
-          state.statement = state.statement.options(
-              with_loader_criteria(TenantMixin, lambda cls: cls.user_id == uid, include_aliases=True)
-          )
-  ```
-  Every query executing through `get_tenant_db` automatically injects the tenant filter. Developers cannot accidentally forget `.where(user_id=...)`.
+- **Fail-Closed Ambient SQL Filter Hook (`app/db/tenant.py`):**
+  The tenant filter is strictly **fail-closed**:
+  - If `current_user_id.get()` is `None` (unscoped ambient context) and an ORM `SELECT`, `UPDATE`, or `DELETE` targets a `TenantMixin` entity, the hook raises `TenantScopeError(RuntimeError)` (mapped to HTTP 500), preventing accidental data leaks or cross-tenant mutations.
+  - For scoped user operations, `SELECT` queries automatically inject `WHERE user_id = :current_user_id` via `with_loader_criteria`. Bulk `UPDATE` and `DELETE` queries check that an active tenant context exists (or explicit bypass).
+  - Explicit exemptions require either `execution_options={"skip_tenant_filter": True}`, the `@contextmanager def tenant_bypass()` context manager, or running in an explicit user scope via `@contextmanager def tenant_as(user_id: str)`.
 - **Tenant-Scoped Object Storage (`StorageService`):** Enforces that any file read, write, or deletion strictly begins with `users/{user_id}/`. Attempting to access keys outside this namespace raises a `PermissionError`.
 
 ### 3.3 Security, Auth & Envelope Encryption
@@ -255,10 +249,16 @@ To ensure strict enterprise-grade data boundaries and eliminate Insecure Direct 
   - Encryption context binds `user_id`, `kind`, and `provider` to the ciphertext.
   - Supports zero-downtime key rotation via `rotate_all()`.
 
-### 3.4 Asynchronous Concurrency Model
-- Async-first runtime on Python 3.11+ using `asyncio`.
-- All heavy CPU work (spaCy tokenization, WeasyPrint PDF compilation, PyPDF2/DOCX parsing) is explicitly offloaded from the main event loop to thread executors via `loop.run_in_executor()` or `asyncio.to_thread()`.
-- Background tasks run in dedicated Arq worker processes, completely decoupled from API HTTP processing.
+### 3.4 Asynchronous Concurrency Model & Persistence Architecture
+- **Async Concurrency:** Async-first runtime on Python 3.11+ using `asyncio`. Heavy CPU work (spaCy tokenization, WeasyPrint PDF compilation, pypdf/DOCX parsing) is explicitly offloaded from the main event loop to thread executors via `asyncio.to_thread()`. Background tasks run in dedicated Arq worker processes.
+- **Naive-UTC Storage Convention:**
+  - All database `DateTime` columns use the custom `UTCDateTime` TypeDecorator (`app.models.base.py`).
+  - Datetimes are stored as **naive UTC** in both SQLite and PostgreSQL. Any timezone-aware datetime passed into queries is normalised on bind (`.astimezone(UTC).replace(tzinfo=None)`), guaranteeing cross-dialect consistency.
+  - PostgreSQL connections configure asyncpg with `connect_args={"server_settings": {"timezone": "UTC"}}`, ensuring engine/server defaults (`func.now()`) evaluate in UTC.
+- **Hermetic PostgreSQL Test Recipe:**
+  - The suite supports opt-in verification on live PostgreSQL using `AUTOAPPLY_TEST_DATABASE_URL` (safety guarded: host must be `localhost`/`127.0.0.1` and database name must contain `test`).
+  - Uses `NullPool`, session-level `create_all`, and fast per-test `TRUNCATE ... RESTART IDENTITY CASCADE`.
+  - Migration tests maintain separate isolated database instances via `TEST_POSTGRES_URL`.
 
 ---
 
@@ -300,9 +300,9 @@ Located in `backend/app/core/ats/`:
 
 ### 5.2 Document Generation & Parsing Engine
 Located in `backend/app/core/documents/`:
-- **Parsing:** `DocumentParser` extracts structured data, contact information, and bullet points from PDF and DOCX uploads.
-- **Generation:** `DocumentGenerator` accepts structured resume data (`TailoredResumeData`), formats it for the requested template, and compiles PDF and DOCX in parallel.
-- **Storage:** Rendered documents are persisted into per-tenant storage keys: `users/{user_id}/generated/resumes/{id}.pdf`.
+- **Parsing:** `DocumentParser` uses `pypdf>=4.0.0` (modern replacement for deprecated PyPDF2) and `python-docx` to extract structured text, contact information, and bullet points from PDF and DOCX uploads.
+- **Generation:** `DocumentGenerator` accepts structured resume data (`TailoredResumeData`), formats it for the requested template, and compiles PDF and DOCX in parallel via WeasyPrint. Cover letters are generated as single-key files with formats inferred from key suffixes.
+- **Storage:** Rendered documents are persisted into per-tenant storage keys: `users/{user_id}/generated/resumes/{id}.pdf` and `users/{user_id}/generated/cover_letters/{id}.pdf`.
 
 ### 5.3 LLM Client Layer (AWS Bedrock & BYO Keys)
 Located in `backend/app/core/llm/`:
@@ -311,20 +311,34 @@ Located in `backend/app/core/llm/`:
 - **Bedrock Mantle Endpoint:** Exposes wider foundation model catalogs through an OpenAI-compatible interface using cached 12-hour IAM-derived bearer tokens.
 - **BYO Key Support:** Users can supply custom OpenAI, Groq, Gemini, or OpenRouter keys encrypted at rest.
 - **Structured Output:** Strictly enforced through JSON schema prompts and Pydantic validation via `complete_with_structured_output()`.
+- **Per-User Monthly Budget Enforcement:**
+  - Configured by `LLM__USER_MONTHLY_BUDGET_USD` (default $5.0; `<= 0` disables).
+  - Spend is computed across the calendar month (UTC) covering all resume, cover letter, and agent step tokens (`token_cost_service`).
+  - Over-budget calls raise `LLMBudgetExceededError`, mapped to **HTTP 402 Payment Required** (`LLM_BUDGET_EXCEEDED`) with limit, spent, and reset date.
+  - Background workers fail over-budget applications terminally (`FAILED`) with an explanatory note, without retry, and skip review jobs quietly.
+- **Dependency Version Caps & Rationale:**
+  - `litellm>=1.40.0,<1.81`: In litellm >= 1.81, `cost_per_token` returns `(0.0, 0.0)` for unmapped models instead of raising an exception. This defeats the local fallback price table in `runtime/usage.py` and causes over-budget users to get unmetered free LLM usage.
+  - `spacy>=3.7.0,<3.8`: In spaCy 3.8 + `en_core_web_sm` 3.8, the NER model tags "Easy Apply" as a `PERSON` entity, producing false-positive PII gate blocks during skill distillation.
 
 ### 5.4 Browser Automation & Platform Integrations
 Located in `backend/app/core/automation/`:
 - **Core Technology:** `browser-use` Agent built on Playwright.
 - **Platform Plugins (`JobPlatform` ABC):** Implementations for LinkedIn, Indeed, and Glassdoor (`search`, `scrape_details`, `apply`, `login`).
-- **Session Replay:** Browser automation loads an encrypted `storage_state` (cookies and local storage) imported via `/api/v1/platform-sessions`.
+- **Session Replay:** Browser automation loads an encrypted `storage_state` (cookies and local storage) imported via `/api/v1/platform-sessions`. Validates session domain coverage via `session_covers_domain`.
 - **Gating:** Live execution is governed by `BROWSER__LIVE_APPLY`. When false, the worker executes a safe placeholder check.
+- **Multilingual Safety:** Tool-level password refusal casefolds and normalizes prompts across 15+ languages while allowing 2FA/verification one-time codes.
 
 ### 5.5 Self-Evolving Evaluation Harness
 Located in `backend/app/core/harness/`:
 - **Judge (`judge.py`):** Uses an LLM auditor to evaluate final screenshots and URLs, returning an independent `RunVerdict` (`success`, `partial`, `failed`).
-- **Diagnose (`diagnose.py`):** Maps execution signals to a failure taxonomy of 13 classes (`CAPTCHA_WALL`, `TWOFA_REQUIRED`, `ANTIBOT_BLOCK`, `DOM_DRIFT`, `FIELD_MISSING`, `SESSION_EXPIRED`, etc.).
-- **Distil (`distil.py`, `skills.py`):** Extracts reusable site knowledge. Passed through regex and spaCy NER PII filters to eliminate sensitive candidate data before storing into `domain_skills`.
-- **Continuous Feedback:** Skills used in successful runs gain score points (+1); failures lose points (-1). Skills falling to $\le -3$ auto-retire.
+- **Diagnose (`diagnose.py`):** Maps execution signals to a failure taxonomy of classes (`CAPTCHA_WALL`, `TWOFA_REQUIRED`, `ANTIBOT_BLOCK`, `LOGIN_FAILED`, `DOM_DRIFT`, `FIELD_MISSING`, `SESSION_EXPIRED`, etc.).
+- **Per-User Distillation & Skills (`distil.py`, `skills.py`):**
+  - `DomainSkill` models inherit `TenantMixin` and are strictly partitioned per user (`user_id`). One user's navigation heuristics or poisoned skills never influence another user's agent runs.
+  - `load_skills(db, user_id, domain)` loads only the caller's skills.
+  - Feedback updates ignore foreign skill IDs.
+  - Skill guidance is capped at 500 characters, stripped of C0/C1 control and Unicode format characters, and enclosed in untrusted fences with nested fence neutralization.
+  - Skills falling to $\le -3$ auto-retire.
+- **Live Migration Deploy Note (0008):** Migration `0008` adds `user_id` to `domain_skills` and wipes unowned legacy global rows. Before running migration `0008` on live databases (such as Neon PostgreSQL), operators must count and back up `domain_skills` via `SELECT count(*) FROM domain_skills;`.
 - **System Monitoring (`anomaly.py`):** Runs periodically to detect anomalous failure rates or queue backlogs, logging them to `system_issues`.
 
 ---
@@ -338,12 +352,18 @@ User Search Query (React UI)
   ├─► POST /api/v1/jobs/search
   │     │
   │     ├─► JobSearchService.search_jobs()
-  │     │     ├─► Parallel Platform Search (LinkedIn, Indeed, Glassdoor via browser-use)
-  │     │     └─► Supplementary Exa AI Semantic Search
+  │     │     ├─► Instant Exa AI Semantic Search (synchronous HTTP return)
+  │     │     ├─► Async Platform Search (LinkedIn, Indeed, Glassdoor offloaded to Arq worker search_boards)
+  │     │     │     └─► Worker Heartbeat Fallback: checks arq:queue:health-check (60s);
+  │     │     │           if worker is offline or enqueue fails, falls back inline bounded
+  │     │     ├─► In-flight search deduplication via Redis status hash (search_id)
+  │     │     └─► Returns immediate JobSearchResponse (Exa jobs + pending_boards + search_id)
   │     │
-  │     ├─► In-memory deduplication by (platform, platform_job_id)
-  │     ├─► Save unique Job listings to Database
-  │     └─► Return paginated JobListResponse
+  │     ├─► Worker runs platform scrapers concurrently under Semaphore(max_parallel)
+  │     │     ├─► Emits "job_search_progress" WebSocket events per board (done|failed|timeout)
+  │     │     └─► Emits "job_search_complete" event with total counts and warnings
+  │     │
+  │     └─► Frontend BoardSearchChips reflect real-time progress and invalidate jobs cache
   │
   └─► User opens JobDrawer -> POST /api/v1/jobs/{id}/analyze
         └─► Runs ResumeScorer against target resume -> returns breakdown
@@ -368,7 +388,7 @@ Check apply_mode setting:
                           │
                           ▼
                   Arq Worker picks up task:
-                    1. Verifies pre-apply ATS threshold (score >= min_ats_score)
+                    1. Verifies pre-apply ATS threshold (score >= UserSettings.min_ats_score)
                     2. Status: APPLYING (emits WebSocket progress)
                     3. Runs browser apply agent (browser-use + Playwright)
                     4. Status: APPLIED + records timestamp
@@ -409,19 +429,21 @@ All routes are mounted under `/api/v1` except for `/health`, `/metrics`, and `/w
 | `POST` | `/api/v1/auth/reset-password` | Rate-limited | Redeems single-use token, resets password, revokes sessions |
 | `GET`  | `/api/v1/auth/me` | Bearer Token | Returns current authenticated user |
 | `GET`  | `/api/v1/auth/ws-ticket` | Bearer Token | Generates short-lived single-use WebSocket ticket |
-| `DELETE`| `/api/v1/auth/account` | Bearer Token | Soft-deletes user account (GDPR grace period) |
-| `POST` | `/api/v1/jobs/search` | Bearer + Rate | Cross-platform and semantic job search |
-| `GET`  | `/api/v1/jobs` | Bearer Token | Paginated job listings for tenant |
+| `DELETE`| `/api/v1/auth/account` | Bearer Token | Soft-deletes user account (30-day grace period, then permanent worker purge; typed-email confirm in UI, no restore path) |
+| `POST` | `/api/v1/jobs/search` | Bearer + Rate | Cross-platform and semantic job search (Exa synchronous, boards enqueued) |
+| `GET`  | `/api/v1/jobs/search/{search_id}` | Bearer Token | Poll status and board progress of background search |
+| `GET`  | `/api/v1/jobs` | Bearer Token | Paginated job listings for tenant (wired to UI Pager) |
 | `GET`  | `/api/v1/jobs/{id}` | Bearer Token | Retrieve single job detail |
 | `POST` | `/api/v1/jobs/{id}/analyze` | Bearer Token | Multi-factor ATS match analysis against resume |
 | `DELETE`| `/api/v1/jobs/{id}` | Bearer Token | Delete job listing and associated applications |
 | `POST` | `/api/v1/applications` | Bearer + Rate | Create application and dispatch by apply mode |
 | `POST` | `/api/v1/applications/batch` | Bearer + Rate | Batch create applications |
-| `GET`  | `/api/v1/applications` | Bearer Token | List applications with pagination and status filters |
+| `GET`  | `/api/v1/applications` | Bearer Token | List applications with pagination and status filters (wired to UI Pager) |
 | `POST` | `/api/v1/applications/bulk-approve`| Bearer Token| Approve and enqueue multiple staged applications |
 | `GET`  | `/api/v1/applications/{id}` | Bearer Token | Retrieve application detail |
 | `PUT`  | `/api/v1/applications/{id}/approve` | Bearer Token| Approve staged application for submission |
 | `POST` | `/api/v1/applications/{id}/cover-letter`| Bearer + Rate| Generate tailored cover letter |
+| `GET`  | `/api/v1/applications/{id}/cover-letter/download` | Bearer Token | Download tailored cover letter (PDF/DOCX) |
 | `POST` | `/api/v1/applications/{id}/intervention`| Bearer Token| Resolve pending CAPTCHA/2FA prompt |
 | `PUT`  | `/api/v1/applications/{id}/status` | Bearer Token | Update application status and notes |
 | `POST` | `/api/v1/resumes/upload` | Bearer Token | Upload PDF/DOCX resume (max 10MB) |
@@ -435,6 +457,7 @@ All routes are mounted under `/api/v1` except for `/health`, `/metrics`, and `/w
 | `GET`  | `/api/v1/analytics/funnel` | Bearer Token | Application stage funnel counts |
 | `GET`  | `/api/v1/analytics/ats-scores` | Bearer Token | ATS score distribution histogram |
 | `GET`  | `/api/v1/analytics/llm-usage` | Bearer Token | Per-provider/model token and cost tracking |
+| `GET`  | `/api/v1/analytics/llm-budget` | Bearer Token | User monthly budget limit, spend, remaining balance, reset timestamp |
 | `GET`  | `/api/v1/analytics/timeline` | Bearer Token | 30-day activity timeline |
 | `GET`  | `/api/v1/settings` | Bearer Token | Retrieve user settings |
 | `PUT`  | `/api/v1/settings` | Bearer Token | Update apply mode, ATS threshold, platform toggles |
@@ -466,6 +489,7 @@ erDiagram
     User ||--o{ Application : owns
     User ||--o{ LLMUsage : owns
     User ||--o{ RunTrajectory : owns
+    User ||--o{ DomainSkill : owns
     User ||--o{ SystemIssue : relates
 
     Job ||--o{ Application : targets
@@ -489,7 +513,10 @@ erDiagram
 10. **`Resume` (`resumes`):** Base and tailored resumes. Stores storage keys for PDF/DOCX, ATS scores, and plain text.
 11. **`LLMUsage` (`llm_usage`):** Per-call token counts, cost in USD, latency in milliseconds, and purpose classification.
 12. **`RunTrajectory` (`run_trajectories`):** Execution step logs, screenshots, tokens, duration, and list of `skills_used`.
-13. **`RunVerdict`, `RunDiagnosis`, `DomainSkill`, `SkillFeedback`, `SystemIssue`:** Harness telemetry and knowledge storage.
+13. **`DomainSkill` (`domain_skills`):** Per-user site navigation and automation heuristics (inherits `TenantMixin` with `user_id` and unique `uq_domain_skill_user_version`).
+14. **`RunVerdict`, `RunDiagnosis`, `SkillFeedback`, `SystemIssue`:** Harness evaluation verdicts, failure classifications, skill feedback, and system issues.
+
+*Database Migrations:* Managed via Alembic with a single linear head at revision `0009` (`llm_purpose_browser_agent`), chaining from `0008` (`domain_skills_per_user`) and `0007` (`simulated_status`). All timestamps use `UTCDateTime` (naive UTC).
 
 ---
 

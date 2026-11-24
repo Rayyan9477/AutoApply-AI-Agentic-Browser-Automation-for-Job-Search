@@ -146,6 +146,8 @@ def create_app() -> FastAPI:
             status_code = 403
         elif exc.code.endswith("RATE_LIMIT"):
             status_code = 429
+        elif exc.code.endswith("BUDGET_EXCEEDED"):
+            status_code = 402
         elif exc.code.endswith("INTEGRITY_ERROR"):
             status_code = 409
 

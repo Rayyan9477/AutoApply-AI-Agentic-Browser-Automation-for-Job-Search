@@ -4,11 +4,12 @@ import structlog
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_tenant_db
+from app.api.deps import CurrentUser, get_tenant_db
 from app.schemas.analytics import (
     ApplicationFunnelData,
     ATSScoreDistribution,
     DashboardStats,
+    LLMBudgetStatus,
     LLMUsageStats,
     TimelineEntry,
 )
@@ -64,6 +65,19 @@ async def llm_usage(
 ) -> list[LLMUsageStats]:
     """Get LLM provider usage statistics."""
     return await analytics_service.get_llm_usage(db)
+
+
+@router.get(
+    "/llm-budget",
+    response_model=LLMBudgetStatus,
+    summary="Get the monthly LLM budget status",
+)
+async def llm_budget(
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_tenant_db),
+) -> LLMBudgetStatus:
+    """Month-to-date LLM spend against the per-user monthly cap (resets on the 1st, UTC)."""
+    return await analytics_service.get_llm_budget(db, user.id)
 
 
 @router.get(

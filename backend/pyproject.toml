@@ -13,7 +13,6 @@ dependencies = [
     # Configuration
     "pydantic>=2.7.0",
     "pydantic-settings>=2.3.0",
-    "python-dotenv>=1.0.0",
 
     # Database
     "sqlalchemy[asyncio]>=2.0.30",
@@ -26,13 +25,11 @@ dependencies = [
     # Browser automation
     "browser-use==0.11.5",
     "playwright>=1.44.0",
-    "langchain-openai>=0.1.0",
-    "langchain-anthropic>=0.1.0",
-    "langchain-google-genai>=1.0.0",
 
     # LLM abstraction layer
-    "litellm>=1.40.0",
-    "portkey-ai>=1.6.0",
+    # Capped: litellm >=1.81 returns (0.0, 0.0) for unknown models instead of raising, which
+    # defeats the fallback price table in runtime/usage.py (budget would see them as free).
+    "litellm>=1.40.0,<1.81",
     # Short-term bearer tokens for the Bedrock Mantle (OpenAI-compatible) endpoint
     "aws-bedrock-token-generator>=1.0.0",
 
@@ -41,17 +38,10 @@ dependencies = [
     "python-docx>=1.1.0",
     "jinja2>=3.1.0",
     "pypdf>=4.0.0",
-    "PyPDF2>=3.0.0",
 
-    # ML / NLP
-    "sentence-transformers>=2.7.0",
-    "faiss-cpu>=1.8.0",
-    "spacy>=3.7.0",
-    "scikit-learn>=1.5.0",
-    "numpy>=1.26.0",
-    "fuzzywuzzy>=0.18.0",
-    "python-Levenshtein>=0.25.0",
-    "python-dateutil>=2.9.0",
+    # NLP
+    # Capped: spacy 3.8 + en_core_web_sm 3.8 tags "Easy Apply" as PERSON, tripping the skill PII gate.
+    "spacy>=3.7.0,<3.8",
 
     # Async I/O
     "httpx>=0.27.0",
@@ -60,6 +50,7 @@ dependencies = [
     # Observability
     "structlog>=24.1.0",
     "prometheus-client>=0.20.0",
+    "sentry-sdk>=2.0.0",
 
     # Resilience
     "tenacity>=8.3.0",
@@ -154,3 +145,10 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# Third-party libraries without type information. Overridden per-module (rather than
+# changing call sites) so test monkeypatching of these modules keeps working.
+[[tool.mypy.overrides]]
+module = ["litellm", "litellm.*", "browser_use", "browser_use.*", "exa_py", "exa_py.*", "aws_bedrock_token_generator", "aws_bedrock_token_generator.*"]
+ignore_missing_imports = true
+implicit_reexport = true

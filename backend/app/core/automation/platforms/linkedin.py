@@ -14,9 +14,9 @@ from app.core.automation.agent import BrowserAgent
 from app.core.automation.platforms.base import (
     JobListing,
     JobPlatform,
+    coerce_agent_dict,
     coerce_agent_list,
 )
-from app.core.automation.session_manager import SessionManager
 from app.core.exceptions import (
     ApplicationSubmissionError,
     AuthenticationError,
@@ -37,10 +37,6 @@ class LinkedInPlatform(JobPlatform):
     authentication, job search, and application submission via Easy Apply.
     """
 
-    def __init__(self) -> None:
-        """Initialize LinkedIn platform with session manager."""
-        self._session_manager = SessionManager()
-
     @property
     def name(self) -> str:
         """Return the platform identifier."""
@@ -49,49 +45,25 @@ class LinkedInPlatform(JobPlatform):
     async def login(self, credentials: dict[str, str]) -> bool:
         """Login to LinkedIn using browser-use Agent.
 
-        Checks for an existing session first. If a saved session exists
-        (via Chrome profile or cookie backup), skips credential-based login
-        and validates the session is still active instead.
+        Session persistence is handled by the encrypted CredentialStore via
+        the platform-sessions API (see ``app/core/secrets/credential_store.py``);
+        this method performs a fresh credential-based login and never writes
+        session state to disk.
 
         Args:
             credentials: Dict with ``email`` and ``password`` keys.
-                Can be empty if a valid session already exists.
 
         Returns:
-            ``True`` if login succeeded or session is already active.
+            ``True`` if the agent-driven login succeeded.
 
         Raises:
-            AuthenticationError: If login fails.
+            AuthenticationError: If login fails or credentials are missing.
         """
-        # Check for existing session first
-        if await self._session_manager.has_session("linkedin"):
-            logger.info("linkedin.session_exists, verifying")
-            agent = BrowserAgent(
-                task=(
-                    "Navigate to https://www.linkedin.com/feed/. "
-                    "Check if the page shows a logged-in LinkedIn feed. "
-                    "If the page redirects to a login form, report 'NOT_LOGGED_IN'. "
-                    "If the feed loads normally, report 'LOGGED_IN'."
-                ),
-            )
-            try:
-                result = await agent.run()
-                if "NOT_LOGGED_IN" not in str(result):
-                    logger.info("linkedin.session_reused")
-                    return True
-                logger.info("linkedin.session_expired, re-authenticating")
-            except Exception:
-                logger.info("linkedin.session_check_failed, re-authenticating")
-            finally:
-                await agent.close()
-
-        # No valid session — perform fresh login
         if not credentials.get("email") or not credentials.get("password"):
             raise AuthenticationError(
                 "linkedin",
-                "No active session found and no credentials provided. "
-                "Either log in via your browser first (Chrome profile reuse) "
-                "or provide email/password.",
+                "No credentials provided. Import a saved session via the "
+                "platform-sessions API or provide email/password.",
             )
 
         agent = BrowserAgent(
@@ -108,8 +80,6 @@ class LinkedInPlatform(JobPlatform):
         )
         try:
             await agent.run()
-            # Save session for future reuse
-            await self._session_manager.save_cookies("linkedin", [{"logged_in": True}])
             logger.info("linkedin.login_success")
             return True
         except Exception as exc:
@@ -123,6 +93,7 @@ class LinkedInPlatform(JobPlatform):
         query: str,
         location: str = "",
         filters: dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> list[JobListing]:
         """Search LinkedIn for jobs matching the query.
 
@@ -154,7 +125,7 @@ class LinkedInPlatform(JobPlatform):
             "id, title, company, location, url, remote."
         )
 
-        agent = BrowserAgent(task=task)
+        agent = BrowserAgent(task=task, user_id=user_id)
         try:
             result = await agent.run()
             listings = self._parse_search_results(result, query)
@@ -272,9 +243,7 @@ class LinkedInPlatform(JobPlatform):
         if "date_posted" in filters:
             parts.append(f"Filter by date posted: {filters['date_posted']}. ")
         if "experience_level" in filters:
-            parts.append(
-                f"Filter by experience level: {filters['experience_level']}. "
-            )
+            parts.append(f"Filter by experience level: {filters['experience_level']}. ")
         if filters.get("remote"):
             parts.append("Filter for remote positions only. ")
         if "job_type" in filters:
@@ -325,19 +294,20 @@ class LinkedInPlatform(JobPlatform):
         Returns:
             ``JobListing`` with full details, or ``None`` if unparseable.
         """
-        if isinstance(raw_result, dict):
+        data = coerce_agent_dict(raw_result)
+        if data is not None:
             return JobListing(
                 platform="linkedin",
-                platform_job_id=str(raw_result.get("id", "")),
-                title=raw_result.get("title", ""),
-                company=raw_result.get("company", ""),
-                location=raw_result.get("location", ""),
+                platform_job_id=str(data.get("id", "")),
+                title=data.get("title", ""),
+                company=data.get("company", ""),
+                location=data.get("location", ""),
                 url=url,
-                description=raw_result.get("description", ""),
-                skills_required=raw_result.get("skills", []),
-                salary_min=raw_result.get("salary_min"),
-                salary_max=raw_result.get("salary_max"),
-                job_type=raw_result.get("job_type", ""),
-                remote=raw_result.get("remote", False),
+                description=data.get("description", ""),
+                skills_required=data.get("skills", []),
+                salary_min=data.get("salary_min"),
+                salary_max=data.get("salary_max"),
+                job_type=data.get("job_type", ""),
+                remote=data.get("remote", False),
             )
         return None

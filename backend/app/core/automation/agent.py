@@ -1,34 +1,72 @@
-"""Browser automation agent wrapping the browser-use package.
+"""Browser automation agent wrapping the browser-use package (0.11.5 API).
 
-Provides a high-level ``BrowserAgent`` that delegates to the browser-use
-``Agent`` for AI-driven web navigation, form filling, and data extraction.
+Provides a high-level ``BrowserAgent`` used by the board platforms (search, detail scraping,
+login) that delegates to the browser-use ``Agent``. The browser profile and the LLM come from
+the same runtime factory as the live apply path, so board search reasons with the configured
+default model (Bedrock by default) instead of a hard-wired OpenAI/langchain client.
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import structlog
 from pydantic import BaseModel
 
 from app.config.settings import get_settings
-from app.core.exceptions import BrowserError
+from app.core.automation.runtime.factory import build_apply_llm, build_browser_profile
+from app.core.automation.runtime.usage import record_agent_usage
+from app.core.exceptions import BrowserError, LLMBudgetExceededError
+from app.core.llm.budget import assert_within_budget
 
 logger = structlog.get_logger(__name__)
 
 
-class BrowserAgent:
-    """Wraps browser-use Agent for AI-driven browser navigation.
+def _default_llm() -> Any:
+    """The runtime factory's model for ``settings.llm.default_model`` (no per-user key).
 
-    Manages a single browser session with cookie persistence,
-    configurable LLM, and structured output extraction.
+    A non-Bedrock model then authenticates only via ``OPENAI_API_KEY``; without it the first
+    LLM call is certain to fail, so fail here, before a browser is launched and navigated.
+    """
+    model = get_settings().llm.default_model
+    if not model.startswith("bedrock/") and not os.environ.get("OPENAI_API_KEY"):
+        raise BrowserError(
+            f"No credentials for browser model '{model}': set OPENAI_API_KEY "
+            "or use a bedrock/ default model."
+        )
+    return build_apply_llm(None, model)
+
+
+def _is_bedrock_model() -> bool:
+    return get_settings().llm.default_model.startswith("bedrock/")
+
+
+def _last_error(history: Any) -> str | None:
+    """Most recent non-empty error recorded in a browser-use ``AgentHistoryList``."""
+    errors = getattr(history, "errors", None)
+    if not callable(errors):
+        return None
+    for error in reversed(errors() or []):
+        if error:
+            return str(error)
+    return None
+
+
+class BrowserAgent:
+    """Wraps the browser-use ``Agent`` for AI-driven browser navigation.
+
+    Each instance owns one ``BrowserSession`` built from a factory ``BrowserProfile``.
 
     Args:
         task: Natural language description of what the agent should do.
-        llm: LangChain-compatible LLM instance. Defaults to ChatOpenAI.
+        llm: browser-use chat model. Defaults to the runtime factory's model for
+            ``settings.llm.default_model``.
         sensitive_data: Credentials dict passed to browser-use
             (e.g. ``{"x_username": "...", "x_password": "..."}``).
-        output_model: Pydantic model for structured output extraction.
+        output_model: Pydantic model the agent's final answer must conform to.
+        user_id: Owner of the run. When set, the monthly LLM budget is checked before a browser
+            is launched and the run's token spend is recorded against it.
     """
 
     def __init__(
@@ -37,119 +75,87 @@ class BrowserAgent:
         llm: Any | None = None,
         sensitive_data: dict[str, str] | None = None,
         output_model: type[BaseModel] | None = None,
+        user_id: str | None = None,
     ) -> None:
-        """Initialize a browser agent for a specific task.
-
-        Args:
-            task: Natural language description of what the agent should do.
-            llm: LangChain-compatible LLM instance. Defaults to ChatOpenAI.
-            sensitive_data: Credentials dict passed to browser-use.
-            output_model: Pydantic model for structured output extraction.
-        """
         self._settings = get_settings().browser
         self._task = task
         self._llm = llm
         self._sensitive_data = sensitive_data or {}
         self._output_model = output_model
+        self._user_id = user_id
         self._agent: Any | None = None
-        self._browser: Any | None = None
+        self._session: Any | None = None
 
-    async def run(self) -> Any:
-        """Execute the browser task and return results.
+    async def run(self) -> str | None:
+        """Execute the browser task and return the agent's final result text.
 
         Returns:
-            Extracted data matching output_model, or raw result string.
+            ``history.final_result()``: the agent's final answer (JSON text when the task asks
+            for JSON, or the serialized ``output_model``), or ``None`` if it produced none.
 
         Raises:
-            BrowserError: If browser-use is not installed or the task fails.
+            BrowserError: browser-use is unavailable, the run raised (browser/CDP, network,
+                LLM auth), or the agent stopped with errors and no result. The original error
+                message is preserved.
         """
         try:
-            from browser_use import Agent, Browser, BrowserConfig
+            from browser_use import Agent, BrowserSession
         except ImportError as exc:
-            raise BrowserError(
-                "browser-use package not installed. "
-                "Install with: pip install browser-use"
-            ) from exc
+            raise BrowserError(f"browser-use is unavailable: {exc}") from exc
 
-        browser_config = BrowserConfig(
-            headless=self._settings.headless,
-            chrome_instance_path=self._settings.user_data_dir,
-        )
-        self._browser = Browser(config=browser_config)
-
-        llm = self._llm or self._get_default_llm()
-
-        agent_kwargs: dict[str, Any] = {
-            "task": self._task,
-            "llm": llm,
-            "browser": self._browser,
-            "max_failures": self._settings.max_failures,
-            "max_actions_per_step": 10,
-        }
-        if self._sensitive_data:
-            agent_kwargs["sensitive_data"] = self._sensitive_data
-        if self._output_model:
-            agent_kwargs["generate_gif"] = False
-
-        self._agent = Agent(**agent_kwargs)
+        if self._user_id:
+            await assert_within_budget(self._user_id)  # before any browser is launched
 
         try:
-            result = await self._agent.run(max_steps=self._settings.max_steps)
-            logger.info(
-                "browser_agent.completed",
-                task=self._task[:80],
-            )
-
-            if self._output_model and hasattr(result, "model_output"):
-                return result.model_output()
-            return result
-
+            llm = self._llm or _default_llm()
+            profile = build_browser_profile(headless=self._settings.headless)
+            self._session = BrowserSession(browser_profile=profile)
+            agent_kwargs: dict[str, Any] = {
+                "browser_session": self._session,
+                "max_failures": self._settings.max_failures,
+                "step_timeout": self._settings.step_timeout,
+            }
+            if self._sensitive_data:
+                agent_kwargs["sensitive_data"] = self._sensitive_data
+            if self._output_model is not None:
+                agent_kwargs["output_model_schema"] = self._output_model
+            self._agent = Agent(task=self._task, llm=llm, **agent_kwargs)
+            try:
+                history = await self._agent.run(max_steps=self._settings.max_steps)
+            finally:
+                if self._user_id:
+                    await record_agent_usage(
+                        self._user_id,
+                        self._agent,
+                        provider="bedrock" if _is_bedrock_model() else "openai",
+                    )
+                # browser-use's Agent.run closes its own keep_alive=False session on every
+                # exit path; drop our handle so close() doesn't kill it a second time.
+                self._session = None
         except Exception as exc:
-            logger.error(
-                "browser_agent.failed",
-                task=self._task[:80],
-                error=str(exc),
-            )
-            raise BrowserError(str(exc)) from exc
+            logger.error("browser_agent.failed", task=self._task[:80], error=str(exc))
+            if isinstance(exc, BrowserError | LLMBudgetExceededError):
+                raise
+            raise BrowserError(str(exc) or type(exc).__name__) from exc
 
-        finally:
-            if not self._settings.keep_alive and self._browser:
-                await self._browser.close()
-
-    def _get_default_llm(self) -> Any:
-        """Create a default LangChain ChatOpenAI instance.
-
-        Returns:
-            ChatOpenAI configured from application settings.
-
-        Raises:
-            BrowserError: If langchain-openai is not installed.
-        """
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError as exc:
-            raise BrowserError(
-                "langchain-openai package not installed. "
-                "Install with: pip install langchain-openai"
-            ) from exc
-
-        settings = get_settings()
-        return ChatOpenAI(
-            model=settings.llm.default_model,
-            api_key=settings.llm.openai_api_key.get_secret_value(),
-            temperature=settings.llm.temperature,
-        )
+        result = history.final_result()
+        if result is None:
+            error = _last_error(history)
+            if error:
+                logger.warning("browser_agent.no_result", task=self._task[:80], error=error)
+                raise BrowserError(error)
+        logger.info("browser_agent.completed", task=self._task[:80], has_result=result is not None)
+        return result
 
     async def close(self) -> None:
-        """Close the browser session and release resources."""
-        if self._browser:
-            try:
-                await self._browser.close()
-            except Exception as exc:
-                logger.warning("browser_agent.close_error", error=str(exc))
-            finally:
-                self._browser = None
-                self._agent = None
+        """Release a session that was built but never run (a completed run already closed it)."""
+        session, self._session, self._agent = self._session, None, None
+        if session is None:
+            return
+        try:
+            await session.kill()
+        except Exception as exc:
+            logger.warning("browser_agent.close_error", error=str(exc))
 
     async def __aenter__(self) -> BrowserAgent:
         """Support async context manager usage."""

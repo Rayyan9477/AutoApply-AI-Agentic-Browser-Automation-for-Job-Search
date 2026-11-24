@@ -12,9 +12,9 @@ from app.core.automation.agent import BrowserAgent
 from app.core.automation.platforms.base import (
     JobListing,
     JobPlatform,
+    coerce_agent_dict,
     coerce_agent_list,
 )
-from app.core.automation.session_manager import SessionManager
 from app.core.exceptions import (
     ApplicationSubmissionError,
     AuthenticationError,
@@ -35,10 +35,6 @@ class GlassdoorPlatform(JobPlatform):
     authentication, job search, and application submission.
     """
 
-    def __init__(self) -> None:
-        """Initialize Glassdoor platform with session manager."""
-        self._session_manager = SessionManager()
-
     @property
     def name(self) -> str:
         """Return the platform identifier."""
@@ -47,45 +43,25 @@ class GlassdoorPlatform(JobPlatform):
     async def login(self, credentials: dict[str, str]) -> bool:
         """Login to Glassdoor using browser-use Agent.
 
-        Checks for an existing session first. If a saved session exists
-        (via Chrome profile or cookie backup), validates it before
-        performing a fresh credential-based login.
+        Session persistence is handled by the encrypted CredentialStore via
+        the platform-sessions API (see ``app/core/secrets/credential_store.py``);
+        this method performs a fresh credential-based login and never writes
+        session state to disk.
 
         Args:
             credentials: Dict with ``email`` and ``password`` keys.
-                Can be empty if a valid session already exists.
 
         Returns:
-            ``True`` if login succeeded or session is already active.
+            ``True`` if the agent-driven login succeeded.
 
         Raises:
-            AuthenticationError: If login fails.
+            AuthenticationError: If login fails or credentials are missing.
         """
-        if await self._session_manager.has_session("glassdoor"):
-            logger.info("glassdoor.session_exists, verifying")
-            agent = BrowserAgent(
-                task=(
-                    "Navigate to https://www.glassdoor.com/. "
-                    "Check if the page shows a logged-in Glassdoor account. "
-                    "If the page shows a sign-in prompt, report 'NOT_LOGGED_IN'. "
-                    "If the account is active, report 'LOGGED_IN'."
-                ),
-            )
-            try:
-                result = await agent.run()
-                if "NOT_LOGGED_IN" not in str(result):
-                    logger.info("glassdoor.session_reused")
-                    return True
-                logger.info("glassdoor.session_expired, re-authenticating")
-            except Exception:
-                logger.info("glassdoor.session_check_failed, re-authenticating")
-            finally:
-                await agent.close()
-
         if not credentials.get("email") or not credentials.get("password"):
             raise AuthenticationError(
                 "glassdoor",
-                "No active session and no credentials provided.",
+                "No credentials provided. Import a saved session via the "
+                "platform-sessions API or provide email/password.",
             )
 
         agent = BrowserAgent(
@@ -102,9 +78,6 @@ class GlassdoorPlatform(JobPlatform):
         )
         try:
             await agent.run()
-            await self._session_manager.save_cookies(
-                "glassdoor", [{"logged_in": True}],
-            )
             logger.info("glassdoor.login_success")
             return True
         except Exception as exc:
@@ -118,6 +91,7 @@ class GlassdoorPlatform(JobPlatform):
         query: str,
         location: str = "",
         filters: dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> list[JobListing]:
         """Search Glassdoor for jobs matching the query.
 
@@ -150,7 +124,7 @@ class GlassdoorPlatform(JobPlatform):
             "id, title, company, location, url, rating, salary, remote."
         )
 
-        agent = BrowserAgent(task=task)
+        agent = BrowserAgent(task=task, user_id=user_id)
         try:
             result = await agent.run()
             listings = self._parse_search_results(result, query)
@@ -276,10 +250,7 @@ class GlassdoorPlatform(JobPlatform):
         if "salary" in filters:
             parts.append(f"Filter by salary range: {filters['salary']}. ")
         if "company_rating" in filters:
-            parts.append(
-                f"Filter by minimum company rating: "
-                f"{filters['company_rating']}. "
-            )
+            parts.append(f"Filter by minimum company rating: " f"{filters['company_rating']}. ")
         if "job_type" in filters:
             parts.append(f"Filter by job type: {filters['job_type']}. ")
         if filters.get("remote"):
@@ -330,19 +301,20 @@ class GlassdoorPlatform(JobPlatform):
         Returns:
             ``JobListing`` with full details, or ``None`` if unparseable.
         """
-        if isinstance(raw_result, dict):
+        data = coerce_agent_dict(raw_result)
+        if data is not None:
             return JobListing(
                 platform="glassdoor",
-                platform_job_id=str(raw_result.get("id", "")),
-                title=raw_result.get("title", ""),
-                company=raw_result.get("company", ""),
-                location=raw_result.get("location", ""),
+                platform_job_id=str(data.get("id", "")),
+                title=data.get("title", ""),
+                company=data.get("company", ""),
+                location=data.get("location", ""),
                 url=url,
-                description=raw_result.get("description", ""),
-                skills_required=raw_result.get("skills", []),
-                salary_min=raw_result.get("salary_min"),
-                salary_max=raw_result.get("salary_max"),
-                job_type=raw_result.get("job_type", ""),
-                remote=raw_result.get("remote", False),
+                description=data.get("description", ""),
+                skills_required=data.get("skills", []),
+                salary_min=data.get("salary_min"),
+                salary_max=data.get("salary_max"),
+                job_type=data.get("job_type", ""),
+                remote=data.get("remote", False),
             )
         return None

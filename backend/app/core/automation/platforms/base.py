@@ -7,6 +7,7 @@ must implement.
 
 import contextlib
 import json
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -16,26 +17,56 @@ from pydantic import BaseModel, ConfigDict, Field
 logger = structlog.get_logger(__name__)
 
 
-def coerce_agent_list(raw_result: Any) -> list[Any]:
-    """Best-effort: turn a browser-use ``Agent.run()`` result into the list of scraped items.
+_FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*\n?(.*?)\n?```$", re.DOTALL)
 
-    On the search path no ``output_model`` is passed, so browser-use returns an
-    ``AgentHistoryList`` (not a ``list``). Extract its final structured payload (a JSON array,
-    or a ``{"jobs": [...]}``-style object) so the parsers see the array they expect instead of
-    silently yielding zero listings. Returns ``[]`` when nothing list-like can be recovered.
+
+def _loads_lenient(text: str) -> Any:
+    """Decode the JSON an LLM agent returned: bare, in a code fence, or embedded in prose."""
+    text = text.strip()
+    fenced = _FENCE_RE.match(text)
+    if fenced:
+        text = fenced.group(1).strip()
+    with contextlib.suppress(ValueError):
+        return json.loads(text)
+    decoder = json.JSONDecoder()
+    for start, char in enumerate(text):
+        if char in "[{":
+            with contextlib.suppress(ValueError):
+                return decoder.raw_decode(text, start)[0]
+    return text
+
+
+def _agent_payload(raw_result: Any) -> Any:
+    """Unwrap a browser-use result into its decoded payload.
+
+    ``BrowserAgent.run`` returns ``history.final_result()`` (a ``str``); a raw
+    ``AgentHistoryList`` (anything with a callable ``final_result``) is still accepted.
     """
-    if isinstance(raw_result, list):
-        return raw_result
+    payload = raw_result
     final = getattr(raw_result, "final_result", None)
-    payload: Any = None
     if callable(final):
+        payload = None
         with contextlib.suppress(Exception):
             payload = final()
-    else:
-        payload = raw_result
     if isinstance(payload, str):
-        with contextlib.suppress(Exception):
-            payload = json.loads(payload)
+        payload = _loads_lenient(payload)
+    return payload
+
+
+def coerce_agent_dict(raw_result: Any) -> dict[str, Any] | None:
+    """Best-effort: turn a browser-use result into the scraped object, or ``None``."""
+    payload = _agent_payload(raw_result)
+    return payload if isinstance(payload, dict) else None
+
+
+def coerce_agent_list(raw_result: Any) -> list[Any]:
+    """Best-effort: turn a browser-use result into the list of scraped items.
+
+    Accepts the ``final_result()`` text (a JSON array, or a ``{"jobs": [...]}``-style object,
+    optionally fenced or wrapped in prose) so the parsers see the array they expect instead of
+    silently yielding zero listings. Returns ``[]`` when nothing list-like can be recovered.
+    """
+    payload = _agent_payload(raw_result)
     if isinstance(payload, list):
         return payload
     if isinstance(payload, dict):
@@ -105,6 +136,7 @@ class JobPlatform(ABC):
         query: str,
         location: str = "",
         filters: dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> list[JobListing]:
         """Search for job listings matching the given criteria.
 
@@ -112,6 +144,7 @@ class JobPlatform(ABC):
             query: Job search query string.
             location: Geographic filter (city, state, or "remote").
             filters: Platform-specific filter parameters.
+            user_id: Owner of the search; the agent run is budget-checked and billed to them.
 
         Returns:
             List of normalized ``JobListing`` objects.
