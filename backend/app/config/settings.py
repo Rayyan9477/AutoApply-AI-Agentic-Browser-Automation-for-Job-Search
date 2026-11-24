@@ -3,7 +3,7 @@
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +51,15 @@ class LLMSettings(BaseSettings):
     # ``https://bedrock-mantle.us-east-1.api.aws/v1`` to enable ``mantle/<model-id>`` models;
     # auth is a short-term bearer token derived from the same AWS credential chain.
     mantle_api_base: str = ""
+    # Per-user cap on the UTC calendar month's LLM spend (USD). ``<= 0`` disables enforcement.
+    # Soft cap: one in-flight call or run may overshoot it.
+    user_monthly_budget_usd: float = Field(default=5.0)
+
+    @field_validator("user_monthly_budget_usd")
+    @classmethod
+    def validate_budget(cls, v: float) -> float:
+        """Clamp a negative budget to 0 (disabled)."""
+        return max(0.0, v)
 
     @field_validator("temperature")
     @classmethod
@@ -84,7 +93,10 @@ class BrowserSettings(BaseSettings):
     live_apply: bool = False
     # How long the apply agent's ``request_human_help`` tool waits for the user to answer a
     # CAPTCHA/2FA prompt before giving up (seconds).
-    intervention_timeout_s: int = 300
+    intervention_timeout_s: int = Field(default=300, gt=0)
+    # Per-board cap (seconds) on a job-board search (each drives a real browser); a board that
+    # overruns is cut off and reported as a warning instead of hanging the search request.
+    search_timeout_s: int = Field(default=90, gt=0)
 
     @field_validator("max_parallel")
     @classmethod
@@ -174,7 +186,6 @@ class Settings(BaseSettings):
 
     # Application behavior
     apply_mode: ApplyMode = ApplyMode.REVIEW
-    min_ats_score: float = 0.75
     environment: Environment = Environment.DEVELOPMENT
     log_level: str = "INFO"
     # Bearer token required to scrape /metrics in production (fail-closed if unset there).
@@ -195,12 +206,6 @@ class Settings(BaseSettings):
 
     # Server (bind host/port live in the uvicorn CMD, not here)
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
-
-    @field_validator("min_ats_score")
-    @classmethod
-    def validate_min_ats_score(cls, v: float) -> float:
-        """Clamp ATS score threshold to 0-1 range."""
-        return max(0.0, min(1.0, v))
 
     @field_validator("log_level")
     @classmethod

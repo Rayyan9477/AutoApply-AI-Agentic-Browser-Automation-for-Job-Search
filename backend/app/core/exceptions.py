@@ -97,6 +97,20 @@ class LLMTimeoutError(LLMError):
         self.code = "LLM_TIMEOUT"
 
 
+class LLMBudgetExceededError(LLMError):
+    """The user's monthly LLM spend cap has been reached."""
+
+    def __init__(self, spent_usd: float = 0.0, limit_usd: float = 0.0, message: str = "") -> None:
+        super().__init__(
+            message
+            or f"Monthly LLM budget of ${limit_usd:.2f} reached (${spent_usd:.2f} used). "
+            "It resets on the 1st (UTC)."
+        )
+        self.code = "LLM_BUDGET_EXCEEDED"
+        self.spent_usd = spent_usd
+        self.limit_usd = limit_usd
+
+
 # --- Browser Automation Errors ---
 
 

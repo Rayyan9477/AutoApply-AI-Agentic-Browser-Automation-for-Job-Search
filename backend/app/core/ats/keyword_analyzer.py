@@ -8,50 +8,154 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from typing import TYPE_CHECKING
 
-import spacy
 import structlog
+
+if TYPE_CHECKING:
+    from spacy.language import Language
 
 logger = structlog.get_logger(__name__)
 
 # Domain-specific terms that carry extra weight when matched.
 INDUSTRY_TERMS: dict[str, list[str]] = {
     "software_engineering": [
-        "algorithms", "data structures", "system design", "microservices",
-        "api", "rest", "graphql", "testing", "code review", "version control",
-        "debugging", "performance optimization", "scalability", "architecture",
+        "algorithms",
+        "data structures",
+        "system design",
+        "microservices",
+        "api",
+        "rest",
+        "graphql",
+        "testing",
+        "code review",
+        "version control",
+        "debugging",
+        "performance optimization",
+        "scalability",
+        "architecture",
     ],
     "data_science": [
-        "statistical analysis", "feature engineering", "model training",
-        "data pipeline", "etl", "visualization", "hypothesis testing",
-        "a/b testing", "regression", "classification", "clustering",
+        "statistical analysis",
+        "feature engineering",
+        "model training",
+        "data pipeline",
+        "etl",
+        "visualization",
+        "hypothesis testing",
+        "a/b testing",
+        "regression",
+        "classification",
+        "clustering",
     ],
     "devops": [
-        "infrastructure as code", "monitoring", "alerting", "deployment",
-        "containerization", "orchestration", "load balancing", "high availability",
-        "disaster recovery", "configuration management", "observability",
+        "infrastructure as code",
+        "monitoring",
+        "alerting",
+        "deployment",
+        "containerization",
+        "orchestration",
+        "load balancing",
+        "high availability",
+        "disaster recovery",
+        "configuration management",
+        "observability",
     ],
     "product_management": [
-        "roadmap", "stakeholder", "user stories", "sprint planning",
-        "backlog", "metrics", "kpi", "okr", "prioritization",
-        "market research", "competitive analysis", "go-to-market",
+        "roadmap",
+        "stakeholder",
+        "user stories",
+        "sprint planning",
+        "backlog",
+        "metrics",
+        "kpi",
+        "okr",
+        "prioritization",
+        "market research",
+        "competitive analysis",
+        "go-to-market",
     ],
     "cybersecurity": [
-        "vulnerability assessment", "penetration testing", "encryption",
-        "firewall", "intrusion detection", "compliance", "soc",
-        "incident response", "threat modeling", "zero trust",
+        "vulnerability assessment",
+        "penetration testing",
+        "encryption",
+        "firewall",
+        "intrusion detection",
+        "compliance",
+        "soc",
+        "incident response",
+        "threat modeling",
+        "zero trust",
     ],
 }
 
 # Common stop words to exclude from keyword extraction.
 _STOP_WORDS: set[str] = {
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "shall", "can", "need", "must", "and", "or",
-    "but", "if", "than", "that", "this", "these", "those", "with", "for",
-    "from", "into", "to", "in", "on", "at", "by", "of", "about", "as",
-    "not", "no", "we", "you", "they", "our", "your", "their", "its",
-    "it", "he", "she", "who", "which", "what", "when", "where", "how",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "shall",
+    "can",
+    "need",
+    "must",
+    "and",
+    "or",
+    "but",
+    "if",
+    "than",
+    "that",
+    "this",
+    "these",
+    "those",
+    "with",
+    "for",
+    "from",
+    "into",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "of",
+    "about",
+    "as",
+    "not",
+    "no",
+    "we",
+    "you",
+    "they",
+    "our",
+    "your",
+    "their",
+    "its",
+    "it",
+    "he",
+    "she",
+    "who",
+    "which",
+    "what",
+    "when",
+    "where",
+    "how",
 }
 
 
@@ -65,7 +169,7 @@ class KeywordAnalyzer:
         nlp: A loaded spaCy language model with word vectors.
     """
 
-    def __init__(self, nlp: spacy.Language) -> None:
+    def __init__(self, nlp: Language) -> None:
         self._nlp = nlp
         logger.info("keyword_analyzer.initialized")
 
@@ -110,7 +214,9 @@ class KeywordAnalyzer:
             return 0.0, {}
 
         tfidf_score, per_keyword = self._tfidf_overlap(
-            resume_keywords, job_keywords, resume_text,
+            resume_keywords,
+            job_keywords,
+            resume_text,
         )
         semantic_score = self._vector_similarity(resume_text, job_description)
         phrase_score = self._phrase_match_score(resume_text, job_description)

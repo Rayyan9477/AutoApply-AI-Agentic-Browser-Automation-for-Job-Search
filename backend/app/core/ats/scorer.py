@@ -24,10 +24,11 @@ _EDUCATION_LEVELS: dict[str, int] = {
 }
 
 # Abbreviated degrees ("B.S.", "MSc", "Ph.D.") carry no spelled-out level word. Bare
-# fragments ("bs", "ms") are deliberately NOT ranked: the requirement regex below can emit
-# them from ordinary words ("jobs", "systems").
+# fragments ("bs", "ms") are deliberately NOT ranked: out of degree context they are pieces
+# of ordinary words ("jobs", "systems"). JD requirements arrive as canonical level names.
 _DEGREE_ABBREVIATIONS: list[tuple[re.Pattern[str], int]] = [
-    (re.compile(r"(?<![a-z])(?:ph\.d|d\.phil)(?![a-z])"), 5),
+    # "Doctor of Philosophy/Medicine/...": the profile extractor emits spelled-out doctorates.
+    (re.compile(r"(?<![a-z])(?:ph\.d|d\.phil|doctor)(?![a-z])"), 5),
     (re.compile(r"(?<![a-z])(?:m\.s\.|m\.sc|msc|m\.a\.|mba|m\.eng)(?![a-z])"), 4),
     (re.compile(r"(?<![a-z])(?:b\.s\.|b\.sc|bsc|b\.a\.|b\.eng|b\.tech)(?![a-z])"), 3),
 ]
@@ -36,12 +37,38 @@ NO_EXPERIENCE_SUGGESTION = (
     "Add dated work experience (e.g. 'Jan 2020 \u2013 Mar 2023') so it can be scored."
 )
 
-_EDUCATION_PATTERNS: list[str] = [
-    r"(?:bachelor|bs|ba|b\.s\.|b\.a\.)\s*(?:degree|'s)?",
-    r"(?:master|ms|ma|m\.s\.|m\.a\.)\s*(?:degree|'s)?",
-    r"(?:phd|ph\.d\.|doctorate)\s*(?:degree)?",
-    r"(?:associate|as|a\.s\.)\s*(?:degree|'s)?",
-    r"(?:high school|ged|diploma)",
+# A JD's education requirement: (pattern, canonical level), tried in order on lower-cased
+# text. Every alternative is bounded on both sides, so ordinary words ("backend", "fastapi",
+# "systems", "diploma", "managed") no longer yield "ba"/"as"/"ms"/"ma"/"ged" requirements that
+# rank 0 and hand every candidate 1.0. Bare "bs"/"ba"/"ms"/"ma" and the job-title words
+# "master"/"associate" need degree context; bare "as" never counts.
+_L = r"(?<![a-z0-9])"
+_R = r"(?![a-z0-9])"
+_APOS = "['\u2019]"
+_DEGREE_WORD = r"(?:bs|ba|ms|ma|b\.|m\.|ph\.?d|bachelor|master|doctor|equivalent|higher|related)"
+# Before a bare abbreviation: not "100 ms" (a latency) and not inside a word.
+_BARE = r"(?<![a-z0-9])(?<!\d\s)"
+# After one: "BS in", "BS degree", "MS required", "BS/MS", "BS, MS", "BS or equivalent".
+_CONTEXT = (
+    rf"(?![a-z0-9])(?=\s*(?:in\s|(?:degree|required|preferred)\b"
+    rf"|/\s*{_DEGREE_WORD}|,\s*{_DEGREE_WORD}|or\s+{_DEGREE_WORD}))"
+)
+_EDUCATION_REQUIREMENTS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(
+        rf"{_L}(?:bachelor(?:{_APOS}?s)?|b\.(?:s|a|sc|eng|tech)\.?|bsc){_R}"
+        rf"|{_BARE}(?:bs|ba){_CONTEXT}"
+    ), "bachelor"),
+    (re.compile(
+        rf"{_L}(?<!scrum\s)(?:master(?:{_APOS}?s)?(?=\s+(?:of|in|degree)\b)|master{_APOS}?s{_R})"
+        rf"|{_L}(?:m\.(?:s|a|sc|eng)\.?|msc|mba){_R}"
+        rf"|{_BARE}(?:ms|(?<!,\s)ma){_CONTEXT}"  # ", MA" is a state code (Boston, MA)
+    ), "master"),
+    (re.compile(rf"{_L}(?:ph\.?d\.?|d\.phil|doctorate|doctor(?=\s+of\b)){_R}"), "phd"),
+    (re.compile(
+        rf"{_L}(?:associate(?:{_APOS}s)?(?=\s+(?:of|in|degree)\b)|associate{_APOS}s"
+        rf"|associates\s+degree|a\.a\.s?\.?|a\.s\.){_R}"
+    ), "associate"),
+    (re.compile(rf"{_L}(?:high\s+school|ged|diploma){_R}"), "high school"),
 ]
 
 
@@ -231,10 +258,11 @@ class ResumeScorer:
         required_level = job_metadata.get("education_requirement", "")
         if not required_level:
             required_level = self._extract_education_requirement(job_description)
-        if not required_level:
+        required_rank = self._education_rank(required_level) if required_level else 0
+        if required_rank == 0:
+            # No requirement, or one we cannot rank: neutral, never a free 1.0.
             return 0.5, []
 
-        required_rank = self._education_rank(required_level)
         matches: list[dict[str, Any]] = []
         best_rank = 0
         for edu in candidate_education:
@@ -257,12 +285,11 @@ class ResumeScorer:
         return score, matches
 
     def _extract_education_requirement(self, job_description: str) -> str:
-        """Extract education requirement from job description text."""
+        """Return the canonical level the JD names (a key of ``_EDUCATION_LEVELS``), or ""."""
         lower = job_description.lower()
-        for pattern in _EDUCATION_PATTERNS:
-            match = re.search(pattern, lower)
-            if match:
-                return match.group(0).strip()
+        for pattern, level in _EDUCATION_REQUIREMENTS:
+            if pattern.search(lower):
+                return level
         return ""
 
     def _education_rank(self, education_text: str) -> int:

@@ -9,6 +9,11 @@ from fastapi import WebSocket
 
 logger = structlog.get_logger(__name__)
 
+# Event types published on the per-user bus (``{"type": ..., "payload": {...}}``).
+EVENT_APPLICATION_PROGRESS = "application_progress"
+EVENT_JOB_SEARCH_PROGRESS = "job_search_progress"  # {search_id, platform, status, count, error}
+EVENT_JOB_SEARCH_COMPLETE = "job_search_complete"  # {search_id, total, warnings, boards}
+
 
 class ConnectionManager:
     """Manages active WebSocket connections, keyed by owning user.

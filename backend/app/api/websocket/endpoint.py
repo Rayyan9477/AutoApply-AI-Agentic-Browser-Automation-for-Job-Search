@@ -1,7 +1,10 @@
 """WebSocket endpoint for real-time client communication (ticket-authenticated)."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -45,7 +48,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
 
     # Forward this user's published progress events to the socket (if Redis is available).
     redis = get_redis()
-    sub_task: asyncio.Task | None = None
+    sub_task: asyncio.Task[Any] | None = None
     if redis is not None:
         sub_task = asyncio.create_task(forward_user_events(redis, user_id, ws))
 

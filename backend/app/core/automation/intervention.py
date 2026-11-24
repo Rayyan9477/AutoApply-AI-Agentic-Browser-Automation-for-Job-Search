@@ -9,6 +9,8 @@ rendezvous goes through Redis: the worker ``BLPOP``s a per-application key; the 
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from redis.asyncio import Redis
 
 
@@ -16,7 +18,7 @@ def intervention_key(application_id: str) -> str:
     return f"intervene:{application_id}"
 
 
-def needs_intervention_event(application_id: str, kind: str, prompt: str) -> dict:
+def needs_intervention_event(application_id: str, kind: str, prompt: str) -> dict[str, Any]:
     """Build the WS event that prompts the user to resolve an intervention."""
     return {
         "type": "intervention_required",
@@ -31,7 +33,8 @@ async def request_intervention(
 
     Returns the user's response string, or ``None`` on timeout.
     """
-    result = await redis.blpop(intervention_key(application_id), timeout=timeout)
+    # redis-py types sync/async as a union and blpop keys as a list; runtime accepts a str.
+    result = await cast(Any, redis).blpop(intervention_key(application_id), timeout=timeout)
     if result is None:
         return None
     _key, value = result
@@ -41,5 +44,6 @@ async def request_intervention(
 async def resolve_intervention(redis: Redis, application_id: str, response: str) -> None:
     """Deliver the user's intervention response to the waiting worker."""
     key = intervention_key(application_id)
-    await redis.rpush(key, response)
-    await redis.expire(key, 600)
+    client = cast(Any, redis)  # redis-py sync/async return-type union
+    await client.rpush(key, response)
+    await client.expire(key, 600)

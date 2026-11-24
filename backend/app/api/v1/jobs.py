@@ -1,19 +1,26 @@
 """Job listing API routes."""
 
+from typing import Any
+
 import structlog
-from fastapi import APIRouter, Depends, Query
+from arq.connections import ArqRedis
+from fastapi import APIRouter, Depends, HTTPException, Query
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, get_tenant_db
+from app.api.deps import CurrentUser, get_redis, get_tenant_db
 from app.config.constants import DEFAULT_PAGE_SIZE
 from app.core.ratelimit import rate_limit
+from app.db.arq import get_arq_pool
 from app.schemas.job import (
     JobAnalysisResponse,
     JobListingResponse,
     JobListResponse,
     JobSearchRequest,
+    JobSearchResponse,
 )
 from app.services import job_search as job_service
+from app.services.dispatch import get_search_status
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -24,7 +31,7 @@ _COSTLY = Depends(rate_limit(30, 60))
 
 @router.post(
     "/search",
-    response_model=JobListResponse,
+    response_model=JobSearchResponse,
     dependencies=[_COSTLY],
     summary="Search for jobs across platforms",
 )
@@ -32,9 +39,28 @@ async def search_jobs(
     request: JobSearchRequest,
     user: CurrentUser,
     db: AsyncSession = Depends(get_tenant_db),
-) -> JobListResponse:
-    """Launch a multi-platform job search for the current user."""
-    return await job_service.search_jobs(db, request, user.id)
+    pool: ArqRedis | None = Depends(get_arq_pool),
+) -> JobSearchResponse:
+    """Launch a multi-platform job search for the current user.
+
+    Exa results come back inline. Board searches run in the background when a worker is up
+    (``search_id`` + ``pending_boards``; progress over the WebSocket and
+    ``GET /jobs/search/{search_id}``), otherwise inline as before.
+    """
+    return await job_service.search_jobs(db, request, user.id, pool)
+
+
+@router.get("/search/{search_id}", summary="Status of a background board search")
+async def get_search_status_route(
+    search_id: str,
+    user: CurrentUser,
+    redis: Redis | None = Depends(get_redis),
+) -> dict[str, Any]:
+    """Per-board status of a search; 404 if unknown, expired, not yours, or Redis is down."""
+    status = await get_search_status(redis, user.id, search_id) if redis is not None else None
+    if status is None:
+        raise HTTPException(status_code=404, detail="Search not found")
+    return status
 
 
 @router.get("/", response_model=JobListResponse, summary="List jobs with pagination")

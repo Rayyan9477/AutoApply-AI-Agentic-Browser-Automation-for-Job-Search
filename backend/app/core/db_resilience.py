@@ -7,7 +7,7 @@ retry on transient failures with exponential backoff.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any, TypeVar
 
@@ -40,7 +40,7 @@ logger = structlog.get_logger(__name__)
 T = TypeVar("T")
 
 
-def handle_db_errors(func: Callable[..., T]) -> Callable[..., T]:
+def handle_db_errors(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
     """Async decorator that maps SQLAlchemy errors to domain exceptions.
 
     Exception mapping:
@@ -60,29 +60,23 @@ def handle_db_errors(func: Callable[..., T]) -> Callable[..., T]:
         try:
             return await func(*args, **kwargs)
         except SAIntegrityError as exc:
-            logger.error(
-                "db_integrity_error", func=func.__name__, error=str(exc)
-            )
+            logger.error("db_integrity_error", func=func.__name__, error=str(exc))
             raise IntegrityError(str(exc)) from exc
         except OperationalError as exc:
-            logger.error(
-                "db_connection_error", func=func.__name__, error=str(exc)
-            )
+            logger.error("db_connection_error", func=func.__name__, error=str(exc))
             raise DBConnectionError(str(exc)) from exc
         except SQLAlchemyError as exc:
-            logger.error(
-                "db_query_error", func=func.__name__, error=str(exc)
-            )
+            logger.error("db_query_error", func=func.__name__, error=str(exc))
             raise QueryError(str(exc)) from exc
 
-    return wrapper  # type: ignore[return-value]
+    return wrapper
 
 
 def with_retry(
     max_attempts: int = 3,
     min_wait: float = 1.0,
     max_wait: float = 10.0,
-) -> Callable:
+) -> Callable[..., Any]:
     """Async retry decorator with exponential backoff for transient DB errors.
 
     Retries on ``OperationalError`` and ``DBAPIError`` which typically
@@ -97,7 +91,7 @@ def with_retry(
         Decorator that wraps an async function with retry logic.
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @retry(
             stop=stop_after_attempt(max_attempts),
             wait=wait_exponential(multiplier=min_wait, max=max_wait),
@@ -108,6 +102,6 @@ def with_retry(
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             return await func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper
 
     return decorator
