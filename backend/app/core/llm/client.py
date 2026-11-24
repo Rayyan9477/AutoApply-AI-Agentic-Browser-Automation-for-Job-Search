@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.config.settings import get_settings
 from app.core.exceptions import LLMProviderError, LLMRateLimitError, LLMTimeoutError
+from app.core.llm.mantle import get_mantle_token
 from app.observability.metrics import (
     llm_cost_usd,
     llm_latency_seconds,
@@ -90,9 +91,7 @@ class LLMClient:
             if value:
                 setattr(litellm, attr, value)
 
-    def _build_messages(
-        self, prompt: str, system_prompt: str
-    ) -> list[dict[str, str]]:
+    def _build_messages(self, prompt: str, system_prompt: str) -> list[dict[str, str]]:
         """Build the messages list for a chat completion request."""
         messages: list[dict[str, str]] = []
         if system_prompt:
@@ -106,13 +105,20 @@ class LLMClient:
         if self._credentials is not None:
             return [model or self._credentials.default_model]
         primary = model or self._llm.default_model
-        # Bedrock is platform-authenticated (AWS creds) — cross-provider fallbacks like
-        # ``groq/anthropic.claude-...`` would be nonsense, so route Bedrock straight through.
-        if primary.startswith("bedrock/"):
-            return [primary]
+        # Bedrock (Converse) and Mantle (Bedrock's OpenAI-compatible endpoint) are both
+        # platform-authenticated via AWS creds — cross-provider fallbacks like
+        # ``groq/anthropic.claude-...`` would be nonsense. Entries in fallback_providers that
+        # are themselves full ``bedrock/…`` or ``mantle/…`` model strings ARE valid fallbacks
+        # (e.g. a cheaper open model); anything else is excluded for an AWS-family primary.
+        if primary.startswith(("bedrock/", "mantle/")):
+            aws_family_fallbacks = [
+                p
+                for p in self._llm.fallback_providers
+                if p.startswith(("bedrock/", "mantle/")) and p != primary
+            ]
+            return [primary, *aws_family_fallbacks]
         fallbacks = [
-            f"{provider}/{primary.split('/')[-1]}"
-            for provider in self._llm.fallback_providers
+            f"{provider}/{primary.split('/')[-1]}" for provider in self._llm.fallback_providers
         ]
         return [primary, *fallbacks]
 
@@ -156,7 +162,9 @@ class LLMClient:
             LLMRateLimitError: Provider rate limit hit on all attempts.
             LLMTimeoutError: All providers timed out.
             LLMProviderError: Non-recoverable provider failure.
+            LLMBudgetExceededError: The bound user's monthly budget is spent.
         """
+        await self._enforce_budget()
         messages = self._build_messages(prompt, system_prompt)
         temp = temperature if temperature is not None else self._llm.temperature
         tokens = max_tokens if max_tokens is not None else self._llm.max_tokens
@@ -182,6 +190,14 @@ class LLMClient:
                     # Bedrock authenticates via the AWS credential chain (env/~/.aws/role);
                     # only the region is passed — never an api_key.
                     kwargs["aws_region_name"] = self._llm.bedrock_region
+                elif attempt_model.startswith("mantle/"):
+                    # Mantle = Bedrock's OpenAI-compatible endpoint. Strip the prefix and
+                    # route through litellm's openai provider against the Mantle base URL,
+                    # authenticated with a cached short-term bearer token derived from the
+                    # same AWS credential chain.
+                    kwargs["model"] = "openai/" + attempt_model.split("/", 1)[1]
+                    kwargs["api_base"] = self._llm.mantle_api_base
+                    kwargs["api_key"] = get_mantle_token(self._llm.bedrock_region)
                 elif self._credentials is not None:
                     kwargs["api_key"] = self._credentials.api_key
 
@@ -195,9 +211,16 @@ class LLMClient:
                 except Exception as cost_exc:
                     # A model missing from litellm's static price map raises here even
                     # though the call already succeeded — never fail a billed call on it.
-                    cost = 0.0
-                    logger.warning(
-                        "llm_cost_unavailable", model=attempt_model, error=str(cost_exc)
+                    logger.warning("llm_cost_unavailable", model=attempt_model, error=str(cost_exc))
+                    # Shared fallback table (offline / unmapped model) so spend still counts
+                    # toward the budget. Imported lazily: usage.py imports this module.
+                    from app.core.automation.runtime.usage import price_tokens
+
+                    cost = price_tokens(
+                        attempt_model,
+                        usage.prompt_tokens or 0,
+                        usage.completion_tokens or 0,
+                        bedrock=False,
                     )
 
                 self._record_metrics(
@@ -241,9 +264,7 @@ class LLMClient:
                     status="rate_limited",
                     latency_s=(time.perf_counter() - start),
                 )
-                logger.warning(
-                    "llm_rate_limited", model=attempt_model, error=str(exc)
-                )
+                logger.warning("llm_rate_limited", model=attempt_model, error=str(exc))
                 continue
 
             except litellm.Timeout as exc:
@@ -255,9 +276,7 @@ class LLMClient:
                     status="timeout",
                     latency_s=(time.perf_counter() - start),
                 )
-                logger.warning(
-                    "llm_timeout", model=attempt_model, error=str(exc)
-                )
+                logger.warning("llm_timeout", model=attempt_model, error=str(exc))
                 continue
 
             except litellm.APIError as exc:
@@ -269,9 +288,7 @@ class LLMClient:
                     status="error",
                     latency_s=(time.perf_counter() - start),
                 )
-                logger.error(
-                    "llm_api_error", model=attempt_model, error=str(exc)
-                )
+                logger.error("llm_api_error", model=attempt_model, error=str(exc))
                 continue
 
             except Exception as exc:
@@ -352,6 +369,14 @@ class LLMClient:
                 message=f"Failed to parse structured output: {exc}",
             ) from exc
 
+    async def _enforce_budget(self) -> None:
+        """Refuse the call when the bound user's monthly LLM budget is spent (soft cap)."""
+        if not self._user_id:
+            return
+        from app.core.llm.budget import assert_within_budget
+
+        await assert_within_budget(self._user_id)
+
     async def _persist_usage(self, response: LLMResponse, purpose: str) -> None:
         """Persist a per-user usage row after a successful call (no-op when unbound)."""
         if not self._user_id:
@@ -374,19 +399,17 @@ class LLMClient:
         cost: float = 0.0,
     ) -> None:
         """Record Prometheus metrics for an LLM call."""
-        llm_requests_total.labels(
-            provider=provider, model=model, status=status
-        ).inc()
-        llm_latency_seconds.labels(
-            provider=provider, model=model, purpose=purpose
-        ).observe(latency_s)
+        llm_requests_total.labels(provider=provider, model=model, status=status).inc()
+        llm_latency_seconds.labels(provider=provider, model=model, purpose=purpose).observe(
+            latency_s
+        )
         if prompt_tokens:
-            llm_tokens_total.labels(
-                provider=provider, model=model, direction="prompt"
-            ).inc(prompt_tokens)
+            llm_tokens_total.labels(provider=provider, model=model, direction="prompt").inc(
+                prompt_tokens
+            )
         if completion_tokens:
-            llm_tokens_total.labels(
-                provider=provider, model=model, direction="completion"
-            ).inc(completion_tokens)
+            llm_tokens_total.labels(provider=provider, model=model, direction="completion").inc(
+                completion_tokens
+            )
         if cost > 0:
             llm_cost_usd.labels(provider=provider, model=model).inc(cost)

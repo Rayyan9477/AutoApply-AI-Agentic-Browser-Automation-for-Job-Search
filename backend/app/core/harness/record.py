@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.harness.diagnose import Diagnosis
@@ -15,8 +17,8 @@ async def record_trajectory(
     user_id: str,
     application_id: str,
     platform: str,
-    steps: list | None = None,
-    screenshots: list | None = None,
+    steps: list[Any] | None = None,
+    screenshots: list[Any] | None = None,
     agent_self_report: str | None = None,
     tokens: int = 0,
     cost_usd: float = 0.0,
@@ -66,7 +68,7 @@ async def record_diagnosis(
     user_id: str,
     run_id: str,
     diagnosis: Diagnosis,
-    signals: dict | None = None,
+    signals: dict[str, Any] | None = None,
 ) -> RunDiagnosis:
     row = RunDiagnosis(
         user_id=user_id,

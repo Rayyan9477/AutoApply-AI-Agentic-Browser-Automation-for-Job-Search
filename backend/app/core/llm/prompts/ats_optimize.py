@@ -5,7 +5,10 @@ the LLM to rewrite the resume to maximize ATS compatibility while
 keeping all content factually accurate.
 """
 
+from __future__ import annotations
+
 import json
+from typing import Any
 
 ATS_OPTIMIZE_SYSTEM_PROMPT = """\
 You are an ATS (Applicant Tracking System) optimization specialist. \
@@ -28,7 +31,7 @@ the candidate has it, even if worded differently in the original.
 def render_ats_optimize_prompt(
     resume_text: str,
     job_description: str,
-    score_breakdown: dict,
+    score_breakdown: dict[str, Any],
     suggestions: list[str],
 ) -> str:
     """Build the user prompt for ATS optimization.

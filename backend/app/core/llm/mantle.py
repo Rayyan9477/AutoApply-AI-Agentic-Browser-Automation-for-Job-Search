@@ -25,6 +25,6 @@ def get_mantle_token(region: str) -> str:
     now = time.monotonic()
     if cached is not None and cached[1] > now:
         return cached[0]
-    token = provide_token(region=region)
+    token = str(provide_token(region=region))
     _cache[region] = (token, now + _TOKEN_TTL_SECONDS)
     return token

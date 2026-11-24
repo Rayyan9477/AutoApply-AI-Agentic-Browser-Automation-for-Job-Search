@@ -8,6 +8,7 @@ specific job while preserving factual accuracy.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -80,7 +81,7 @@ accurately describes the candidate's experience.
 
 
 def render_resume_tailor_prompt(
-    resume_data: dict,
+    resume_data: dict[str, Any],
     job_description: str,
 ) -> str:
     """Build the user prompt for resume tailoring.

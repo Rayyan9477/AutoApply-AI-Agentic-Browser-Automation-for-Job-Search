@@ -1,4 +1,6 @@
-"""Secrets provider factory (local now; KMS deferred to Phase 4)."""
+"""Secrets provider factory. The Fernet envelope provider (``SECRETS__PROVIDER=local``,
+keys via ``SECRETS__APP_KEYS``) is the shipped default; ``kms`` selects an unimplemented
+AWS KMS stub."""
 
 from __future__ import annotations
 

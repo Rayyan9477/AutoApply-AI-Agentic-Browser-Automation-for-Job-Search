@@ -17,6 +17,7 @@ from typing import Any
 import structlog
 
 from app.core.automation.platforms.base import JobListing
+from app.core.exceptions import SearchError
 
 logger = structlog.get_logger(__name__)
 
@@ -88,6 +89,11 @@ class ExaJobSearch:
 
         Returns:
             List of JobListing objects from search results.
+
+        Raises:
+            SearchError: The source failed (bad key, quota, network, client error). It is
+                raised, not swallowed, so the caller can report it instead of showing a
+                dead source as "no jobs found".
         """
         import asyncio
 
@@ -122,7 +128,7 @@ class ExaJobSearch:
 
         except Exception as exc:
             logger.error("exa_search_failed", query=query, error=str(exc))
-            return []
+            raise SearchError("exa", str(exc)) from exc
 
     def _build_query(
         self,

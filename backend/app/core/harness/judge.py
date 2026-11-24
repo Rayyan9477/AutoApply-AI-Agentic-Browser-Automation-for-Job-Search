@@ -32,7 +32,7 @@ class _StructuredLLM(Protocol):
     ) -> Any: ...
 
 
-async def judge_run(llm: _StructuredLLM, summary: dict) -> JudgeOutput:
+async def judge_run(llm: _StructuredLLM, summary: dict[str, Any]) -> JudgeOutput:
     """Ask the LLM to judge a run from its trajectory summary."""
     prompt = (
         "Judge this application run. Evidence (final URL, last screenshot description, "
