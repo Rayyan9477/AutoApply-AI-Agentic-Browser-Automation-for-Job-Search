@@ -11,6 +11,16 @@ export interface DashboardStats {
   total_llm_cost_usd: number;
 }
 
+/** Month-to-date LLM spend against the per-user monthly cap (UTC calendar month). */
+export interface LLMBudgetStatus {
+  limit_usd: number;
+  spent_usd: number;
+  /** null when the cap is disabled (limit 0). */
+  remaining_usd: number | null;
+  /** ISO-8601 UTC instant the budget resets. */
+  resets_at: string;
+}
+
 /** A single stage in the application funnel. */
 export interface ApplicationFunnelData {
   stage: string;

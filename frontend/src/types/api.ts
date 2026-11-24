@@ -2,6 +2,8 @@
 export interface ApiError {
   detail: string;
   status_code: number;
+  /** Machine-readable error code from the backend (e.g. `LLM_BUDGET_EXCEEDED`). */
+  code?: string;
   trace_id?: string;
 }
 

@@ -1,5 +1,18 @@
 import type { PaginatedResponse } from './api';
 
+export type ApplicationStatus =
+  | 'queued'
+  | 'pending_review'
+  | 'approved'
+  | 'applying'
+  | 'applied'
+  | 'interview'
+  | 'offer'
+  | 'rejected'
+  | 'withdrawn'
+  | 'failed'
+  | 'simulated';
+
 /**
  * A single job application record.
  * Corresponds to the backend `ApplicationResponse` Pydantic schema.
@@ -10,7 +23,7 @@ export interface Application {
   job_title: string | null;
   company: string | null;
   resume_id: string | null;
-  status: string;
+  status: ApplicationStatus | string;
   apply_mode: string;
   ats_score: number | null;
   cover_letter_path: string | null;

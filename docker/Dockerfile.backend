@@ -11,6 +11,8 @@ WORKDIR /app
 # Copy application code first (needed for non-editable install)
 COPY backend/pyproject.toml backend/setup.cfg* ./
 COPY backend/app/ ./app/
+# Jinja/WeasyPrint document templates
+COPY templates/ ./templates/
 
 # Install Python dependencies (non-editable)
 RUN pip install --no-cache-dir ".[dev]"
